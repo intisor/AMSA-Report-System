@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AMSAReportingSystem.Client/AMSAReportingSystem.Client.csproj" />
+  <Project Path="AMSAReportingSystem/AMSAReportingSystem.csproj" />
+</Solution>
