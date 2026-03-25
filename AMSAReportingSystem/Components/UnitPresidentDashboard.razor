@@ -1,0 +1,296 @@
+@using AMSAReportingSystem.Services
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Unit Report Status - January 2025</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info mb-0">
+                        <strong>Status:</strong> 8 of 9 departments have submitted their sections
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Department Submissions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="department-grid">
+                        @foreach (var dept in new[] { "Taleem", "Tabligh", "Welfare", "Sport", "Finance", "Health", "SecondarySchool", "Tajneed", "General" })
+                        {
+                            var isCompliant = dept != "Finance"; // Finance is non-compliant for demo
+                            var isSubmitted = dept != "General"; // General not yet submitted
+                            
+                            <div class="dept-card @(isSubmitted ? "submitted" : "pending") @(isCompliant ? "compliant" : "warning")">
+                                <div class="dept-header">
+                                    <h6 class="mb-0">@dept</h6>
+                                    <span class="badge @GetStatusBadge(isSubmitted, isCompliant)">
+                                        @if (!isSubmitted)
+                                        {
+                                            <span>Pending</span>
+                                        }
+                                        else if (isCompliant)
+                                        {
+                                            <span>✓ Compliant</span>
+                                        }
+                                        else
+                                        {
+                                            <span>⚠ Review</span>
+                                        }
+                                    </span>
+                                </div>
+                                @if (isSubmitted)
+                                {
+                                    <small class="text-muted d-block mb-2">Submitted Jan 28, 2025</small>
+                                }
+                                @if (!isCompliant && isSubmitted)
+                                {
+                                    <small class="text-warning d-block mb-2">
+                                        <strong>Issue:</strong> Collection rate below threshold
+                                    </small>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0">Presidential Review</h5>
+                </div>
+                <div class="card-body">
+                    <div class="form-group mb-3">
+                        <label for="presNote" class="form-label">Your Comments</label>
+                        <textarea class="form-control" id="presNote" rows="4" placeholder="Add any comments or observations..."></textarea>
+                    </div>
+                    <button class="btn btn-success" @onclick="SubmitReport">
+                        ✓ Approve & Forward to State
+                    </button>
+                    <button class="btn btn-outline-secondary" @onclick="SaveAsDraft">
+                        Save as Draft
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">Compliance Summary</h6>
+                </div>
+                <div class="card-body">
+                    <div class="compliance-stat">
+                        <div class="stat-label">Compliant</div>
+                        <div class="stat-value text-success">8</div>
+                    </div>
+                    <div class="compliance-stat">
+                        <div class="stat-label">Needs Review</div>
+                        <div class="stat-value text-warning">1</div>
+                    </div>
+                    <div class="compliance-stat">
+                        <div class="stat-label">Pending</div>
+                        <div class="stat-value text-secondary">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">Timeline</h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker success"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">Jan 20</small>
+                                <p class="mb-0">Cycle opened</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker success"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">Jan 28</small>
+                                <p class="mb-0">All sections submitted</p>
+                            </div>
+                        </div>
+                        <div class="timeline-item active">
+                            <div class="timeline-marker active"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">Now</small>
+                                <p class="mb-0"><strong>President reviews</strong></p>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">Feb 7</small>
+                                <p class="mb-0">State review</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .department-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 15px;
+    }
+
+    .dept-card {
+        padding: 15px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        background: white;
+        transition: all 0.3s ease;
+    }
+
+    .dept-card.submitted {
+        background: #f0f7ff;
+        border-color: #667eea;
+    }
+
+    .dept-card.pending {
+        background: #fff8f0;
+        border-color: #ffc107;
+    }
+
+    .dept-card.compliant {
+        border-color: #28a745;
+    }
+
+    .dept-card.warning {
+        border-color: #ffc107;
+    }
+
+    .dept-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .dept-card h6 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .badge {
+        font-size: 11px;
+        padding: 4px 6px;
+        white-space: nowrap;
+    }
+
+    .compliance-stat {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .compliance-stat:last-child {
+        border-bottom: none;
+    }
+
+    .stat-label {
+        font-size: 13px;
+        color: #666;
+    }
+
+    .stat-value {
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    .timeline {
+        position: relative;
+        padding: 10px 0;
+    }
+
+    .timeline-item {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 15px;
+        position: relative;
+    }
+
+    .timeline-item:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        left: 6px;
+        top: 30px;
+        height: 20px;
+        width: 2px;
+        background: #e9ecef;
+    }
+
+    .timeline-item.active::after {
+        background: #667eea;
+    }
+
+    .timeline-marker {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #e9ecef;
+        flex-shrink: 0;
+        margin-top: 3px;
+    }
+
+    .timeline-marker.success {
+        background: #28a745;
+    }
+
+    .timeline-marker.active {
+        background: #667eea;
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+    }
+
+    .timeline-content {
+        padding-top: 2px;
+    }
+
+    .timeline-content p {
+        margin: 0;
+        font-size: 13px;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public AuthContext? CurrentUser { get; set; }
+
+    private void SubmitReport()
+    {
+        Console.WriteLine("Report approved and forwarded");
+    }
+
+    private void SaveAsDraft()
+    {
+        Console.WriteLine("Report saved as draft");
+    }
+
+    private string GetStatusBadge(bool isSubmitted, bool isCompliant)
+    {
+        if (!isSubmitted) return "bg-warning";
+        return isCompliant ? "bg-success" : "bg-danger";
+    }
+}

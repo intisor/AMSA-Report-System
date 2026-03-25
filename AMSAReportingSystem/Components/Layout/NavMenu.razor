@@ -1,30 +1,72 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">AMSAReportingSystem</a>
-    </div>
-</div>
+﻿@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using AMSAReportingSystem.Services
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<ul class="navbar-nav ms-auto">
+    @if (CurrentUser?.IsAuthenticated ?? false)
+    {
+        <li class="nav-item">
+            <a class="nav-link" href="/dashboard">Dashboard</a>
+        </li>
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
+        @if (CurrentUser?.IsDepartmentOfficer ?? false)
+        {
+            <li class="nav-item">
+                <a class="nav-link" href="/report/taleem">My Report</a>
+            </li>
+        }
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
+        <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle" href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <strong>@CurrentUser?.FirstName</strong> 
+                <span class="badge bg-light text-dark ms-2">@GetRoleLabel()</span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                <li><span class="dropdown-item-text">@CurrentUser?.FullName</span></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#" @onclick="LogoutAsync">Logout</a></li>
+            </ul>
+        </li>
+    }
+    else
+    {
+        <li class="nav-item">
+            <a class="nav-link btn btn-outline-light px-3" href="/login">Login</a>
+        </li>
+    }
+</ul>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-    </nav>
-</div>
+@code {
+    private AuthContext? CurrentUser;
+
+    protected override void OnInitialized()
+    {
+        var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+        CurrentUser = amsaProvider.GetCurrentUser();
+    }
+
+    private async Task LogoutAsync(MouseEventArgs e)
+    {
+        var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+        await amsaProvider.LogoutAsync();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private string GetRoleLabel()
+    {
+        if (CurrentUser?.IsDepartmentOfficer ?? false)
+            return "Officer";
+        else if (CurrentUser?.IsUnitPresident ?? false)
+            return "President";
+        else if (CurrentUser?.IsStateGS ?? false)
+            return "State GS";
+        else if (CurrentUser?.IsNationalGS ?? false)
+            return "National GS";
+        else if (CurrentUser?.IsNationalLeadership ?? false)
+            return "National";
+        return "User";
+    }
+}
 

@@ -1,7 +1,139 @@
 ﻿@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
+@using AMSAReportingSystem.Services
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
 
-<PageTitle>Home</PageTitle>
+<PageTitle>AMSA Reporting System</PageTitle>
 
-<h1>Hello, world!</h1>
+@if (CurrentUser == null)
+{
+    <!-- Not authenticated - Show landing page -->
+    <div class="container py-5">
+        <div class="row align-items-center min-vh-100">
+            <div class="col-lg-6 mx-auto">
+                <div class="text-center mb-5">
+                    <h1 class="display-4 fw-bold mb-4" style="color: #667eea;">
+                        <span style="font-size: 3rem;">📋</span>
+                        <br>
+                        AMSA Reporting System
+                    </h1>
+                    <p class="lead text-muted mb-4">
+                        Streamlined monthly reporting for all MSSA/AMSA units across Nigeria
+                    </p>
+                    <p class="text-secondary mb-5">
+                        Submit reports, track compliance, and monitor organizational performance
+                    </p>
+                </div>
 
-Welcome to your new app.
+                <div class="card shadow-lg border-0 mb-4">
+                    <div class="card-body p-5">
+                        <h4 class="card-title mb-4 text-center">Key Features</h4>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <div style="font-size: 2rem; margin-bottom: 10px;">📤</div>
+                                    <h6>Monthly Submissions</h6>
+                                    <small class="text-muted">Report on 9 departments</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <div style="font-size: 2rem; margin-bottom: 10px;">✅</div>
+                                    <h6>Compliance Tracking</h6>
+                                    <small class="text-muted">Real-time validation</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <div style="font-size: 2rem; margin-bottom: 10px;">🔄</div>
+                                    <h6>Multi-Level Approvals</h6>
+                                    <small class="text-muted">Officer → President → State → National</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="feature-item">
+                                    <div style="font-size: 2rem; margin-bottom: 10px;">📊</div>
+                                    <h6>Analytics Dashboard</h6>
+                                    <small class="text-muted">State and national insights</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <button class="btn btn-primary btn-lg px-5 py-3" @onclick="GoToLogin">
+                        <strong>Sign In to Continue →</strong>
+                    </button>
+                </div>
+
+                <p class="text-center text-muted mt-4 small">
+                    Test Credentials Available:
+                    <br>
+                    Officer: 10001 | President: 10002 | State GS: 20001 | National: 30001
+                </p>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <!-- Authenticated - Show dashboard for their role -->
+    <div class="alert alert-info" role="alert">
+        <strong>Welcome, @CurrentUser.FirstName! 👋</strong> Redirecting to your dashboard...
+    </div>
+}
+
+<style>
+    .feature-item {
+        text-align: center;
+        padding: 15px;
+    }
+
+    .feature-item h6 {
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+
+    .min-vh-100 {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+    }
+</style>
+
+@code {
+    private AuthContext? CurrentUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+        CurrentUser = amsaProvider.GetCurrentUser();
+
+        if (CurrentUser?.IsAuthenticated ?? false)
+        {
+            // Redirect authenticated users to their dashboard
+            await Task.Delay(1000);
+            Nav.NavigateTo("/dashboard", replace: true);
+        }
+    }
+
+    private void GoToLogin()
+    {
+        Nav.NavigateTo("/login");
+    }
+}

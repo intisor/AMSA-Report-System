@@ -1,0 +1,198 @@
+@using AMSAReportingSystem.Services
+@inject NavigationManager Nav
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Monthly Report Submission</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-box">
+                                <h6 class="text-muted">Reporting Cycle</h6>
+                                <p class="mb-0"><strong>January 2025</strong></p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-box">
+                                <h6 class="text-muted">Submission Deadline</h6>
+                                <p class="mb-0"><strong>February 7, 2025</strong> <span class="badge bg-warning">6 days left</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Your Department Section</h5>
+                </div>
+                <div class="card-body">
+                    @if (CurrentUser?.Roles.Any(r => r.StartsWith("Taleem")) ?? false)
+                    {
+                        <div class="section-selector">
+                            <div class="section-card">
+                                <div class="section-icon">
+                                    <i class="bi bi-book"></i>
+                                </div>
+                                <div class="section-info">
+                                    <h6>Islamic Education (Taleem)</h6>
+                                    <p class="mb-2 text-muted">Report on monthly education sessions and attendance</p>
+                                    <small class="status-badge draft">Draft</small>
+                                </div>
+                                <button class="btn btn-primary btn-sm" @onclick="async () => await EditTaleemAsync()">
+                                    Edit Form →
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    else if (CurrentUser?.Roles.Any(r => r.StartsWith("Tabligh")) ?? false)
+                    {
+                        <div class="section-selector">
+                            <div class="section-card">
+                                <div class="section-icon">
+                                    <i class="bi bi-megaphone"></i>
+                                </div>
+                                <div class="section-info">
+                                    <h6>Preaching (Tabligh)</h6>
+                                    <p class="mb-2 text-muted">Report on preaching and outreach activities</p>
+                                    <small class="status-badge draft">Draft</small>
+                                </div>
+                                <button class="btn btn-primary btn-sm" @onclick="async () => await EditTablighAsync()">
+                                    Edit Form →
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">Progress</h6>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3">
+                        <div class="progress-bar" role="progressbar" style="width: 30%;" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100">30%</div>
+                    </div>
+                    <small class="text-muted">1 of 9 sections submitted</small>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0">Recent Notifications</h6>
+                </div>
+                <div class="card-body" style="max-height: 300px; overflow-y: auto;">
+                    <div class="notification-item">
+                        <small class="text-muted d-block mb-1">Today at 9:30 AM</small>
+                        <p class="mb-2"><strong>Reminder:</strong> January reporting cycle is open</p>
+                    </div>
+                    <hr class="my-2" />
+                    <div class="notification-item">
+                        <small class="text-muted d-block mb-1">Yesterday at 3:15 PM</small>
+                        <p class="mb-2"><strong>Ready:</strong> Submit your department report</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .info-box {
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+    }
+
+    .section-selector {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .section-card {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        padding: 20px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        background: white;
+        transition: all 0.3s ease;
+    }
+
+    .section-card:hover {
+        border-color: #667eea;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+    }
+
+    .section-icon {
+        font-size: 32px;
+        color: #667eea;
+        flex-shrink: 0;
+    }
+
+    .section-info {
+        flex: 1;
+    }
+
+    .section-info h6 {
+        margin: 0 0 4px 0;
+        font-weight: 600;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .status-badge.draft {
+        background: #fff3cd;
+        color: #856404;
+    }
+
+    .status-badge.submitted {
+        background: #d1ecf1;
+        color: #0c5460;
+    }
+
+    .notification-item {
+        padding: 10px 0;
+    }
+
+    .notification-item p {
+        margin: 0;
+        font-size: 14px;
+    }
+</style>
+
+@code {
+    [Parameter]
+    public AuthContext? CurrentUser { get; set; }
+
+    private async Task EditTaleemAsync()
+    {
+        Nav.NavigateTo("/report/taleem");
+        await Task.CompletedTask;
+    }
+
+    private async Task EditTablighAsync()
+    {
+        Nav.NavigateTo("/report/tabligh");
+        await Task.CompletedTask;
+    }
+}

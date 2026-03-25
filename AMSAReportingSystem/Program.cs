@@ -1,5 +1,10 @@
 using AMSAReportingSystem.Client.Pages;
 using AMSAReportingSystem.Components;
+using AMSAReportingSystem.Data;
+using AMSAReportingSystem.Services;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,6 +12,28 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
 	.AddInteractiveServerComponents()
 	.AddInteractiveWebAssemblyComponents();
+
+// Add database context
+builder.Services.AddDbContext<AmsaReportingDbContext>(options =>
+	options.UseSqlServer(builder.Configuration.GetConnectionString("AmsaReportingDb") 
+		?? "Server=(localdb)\\mssqllocaldb;Database=AmsaReportingDb;Trusted_Connection=true;"));
+
+// Configure AMSA API client options
+builder.Services.Configure<AmSaApiClientOptions>(
+	builder.Configuration.GetSection(AmSaApiClientOptions.SectionName));
+
+// Add typed HttpClient for AMSA API
+builder.Services.AddHttpClient<IAmSaApiClient, AmSaApiClient>((serviceProvider, client) =>
+	{
+		var options = serviceProvider.GetRequiredService<IOptions<AmSaApiClientOptions>>();
+		client.BaseAddress = new Uri(options.Value.BaseUrl);
+		client.Timeout = TimeSpan.FromSeconds(options.Value.RequestTimeoutSeconds);
+	});
+
+// Add authentication services
+builder.Services.AddScoped<AmSaAuthService>();
+builder.Services.AddScoped<AuthenticationStateProvider, AmsaAuthStateProvider>();
+builder.Services.AddAuthorizationCore();
 
 var app = builder.Build();
 

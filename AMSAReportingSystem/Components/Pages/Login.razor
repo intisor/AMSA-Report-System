@@ -1,0 +1,175 @@
+@page "/login"
+@using Microsoft.AspNetCore.Components.Authorization
+@using AMSAReportingSystem.Services
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <h1>AMSA Reporting System</h1>
+            <p class="subtitle">Ahmadiyya Muslim Students' Association Nigeria</p>
+        </div>
+
+        <div class="login-body">
+            <form @onsubmit="HandleLogin">
+                <div class="form-group mb-3">
+                    <label for="mkanId" class="form-label">MKAN ID</label>
+                    <input 
+                        type="text" 
+                        class="form-control form-control-lg" 
+                        id="mkanId" 
+                        placeholder="Enter your MKAN ID"
+                        @bind="MkanId"
+                        disabled="@IsLoading"
+                    />
+                    <small class="text-muted d-block mt-1">Test IDs: 10001 (Officer), 10002 (President), 20001 (State GS), 30001 (National GS), 30002 (National Pres)</small>
+                </div>
+
+                <div class="form-group mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input 
+                        type="password" 
+                        class="form-control form-control-lg" 
+                        id="password" 
+                        placeholder="Enter your password"
+                        @bind="Password"
+                        disabled="@IsLoading"
+                    />
+                    <small class="text-muted d-block mt-1">Any password will work for demo</small>
+                </div>
+
+                @if (!string.IsNullOrEmpty(ErrorMessage))
+                {
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        @ErrorMessage
+                        <button type="button" class="btn-close" @onclick="() => ErrorMessage = null"></button>
+                    </div>
+                }
+
+                <button type="submit" class="btn btn-primary btn-lg w-100" disabled="@IsLoading">
+                    @if (IsLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        <span>Logging in...</span>
+                    }
+                    else
+                    {
+                        <span>Login</span>
+                    }
+                </button>
+            </form>
+        </div>
+
+        <div class="login-footer">
+            <p class="text-muted text-center mb-0">
+                This is a proof-of-concept interface. No real data is persisted.
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .login-container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 20px;
+    }
+
+    .login-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        width: 100%;
+        max-width: 450px;
+        overflow: hidden;
+    }
+
+    .login-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px 30px;
+        text-align: center;
+    }
+
+    .login-header h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 700;
+    }
+
+    .login-header .subtitle {
+        margin: 8px 0 0 0;
+        font-size: 14px;
+        opacity: 0.95;
+    }
+
+    .login-body {
+        padding: 40px 30px;
+    }
+
+    .login-footer {
+        background: #f8f9fa;
+        padding: 20px 30px;
+        border-top: 1px solid #e9ecef;
+    }
+
+    .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+        background: linear-gradient(135deg, #5568d3 0%, #693a91 100%);
+    }
+</style>
+
+@code {
+    private string? MkanId;
+    private string? Password;
+    private string? ErrorMessage;
+    private bool IsLoading;
+
+    private async Task HandleLogin()
+    {
+        try
+        {
+            IsLoading = true;
+            ErrorMessage = null;
+
+            if (string.IsNullOrWhiteSpace(MkanId) || string.IsNullOrWhiteSpace(Password))
+            {
+                ErrorMessage = "Please enter both MKAN ID and password";
+                return;
+            }
+
+            var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+            await amsaProvider.LoginAsync(MkanId);
+            Nav.NavigateTo("/dashboard", forceLoad: false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = "An unexpected error occurred. Please try again.";
+            Console.WriteLine($"Login error: {ex.Message}");
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+}

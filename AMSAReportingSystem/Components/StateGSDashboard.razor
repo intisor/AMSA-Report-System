@@ -1,0 +1,157 @@
+@using AMSAReportingSystem.Services
+
+<div class="container">
+    <div class="alert alert-info">
+        <h5 class="alert-heading">State Dashboard</h5>
+        <p class="mb-0">View and manage state-level reports from all units in your state.</p>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-number text-primary">12</div>
+                <div class="stat-label">Units in State</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-number text-success">11</div>
+                <div class="stat-label">Reports Submitted</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-number text-warning">1</div>
+                <div class="stat-label">Pending</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-number text-info">9</div>
+                <div class="stat-label">Compliant</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Unit Reports for January 2025</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Unit</th>
+                        <th>President</th>
+                        <th>Submitted</th>
+                        <th>Compliance</th>
+                        <th>Status</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var unit in new[] { 
+                        ("Covenant University", "Ahmed Ibrahim", true, 90),
+                        ("UI Ibadan", "Fatima Okonkwo", true, 100),
+                        ("Lagos State University", "Ibrahim Hassan", true, 85),
+                        ("Ahmadu Bello University", "Maryam Sule", true, 95),
+                        ("University of Nigeria", "Chinedu Obi", true, 88),
+                        ("Federal University of Technology", "Zainab Ahmed", true, 100),
+                        ("Obafemi Awolowo University", "Kadir Adebayo", true, 92),
+                        ("University of Ibadan", "Aisha Mohammed", true, 87),
+                        ("LASU", "Oluwaseun Oladele", true, 100),
+                        ("OAU", "Toyin Adeleke", true, 90),
+                        ("ABU", "Fatah Ibrahim", false, 0),
+                        ("UNILAG", "Grace Okonkwo", true, 95)
+                    })
+                    {
+                        <tr>
+                            <td><strong>@unit.Item1</strong></td>
+                            <td>@unit.Item2</td>
+                            <td>
+                                @if (unit.Item3)
+                                {
+                                    <span class="badge bg-success">Submitted</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-warning">Pending</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="compliance-bar">
+                                    <div class="compliance-fill" style="width: @unit.Item4%"></div>
+                                    <span class="compliance-label">@unit.Item4%</span>
+                                </div>
+                            </td>
+                            <td>
+                                @if (unit.Item3)
+                                {
+                                    <span class="badge bg-info">Awaiting Review</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-danger">Overdue</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary">Review</button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    .stat-card {
+        background: white;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .stat-number {
+        font-size: 32px;
+        font-weight: 700;
+        margin: 0 0 10px 0;
+    }
+
+    .stat-label {
+        font-size: 14px;
+        color: #666;
+    }
+
+    .compliance-bar {
+        position: relative;
+        height: 24px;
+        background: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .compliance-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+    }
+
+    .compliance-label {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 12px;
+        font-weight: 600;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+</style>
+
+@code {
+    [Parameter]
+    public AuthContext? CurrentUser { get; set; }
+}

@@ -1,0 +1,91 @@
+@page "/dashboard"
+@using Microsoft.AspNetCore.Components.Authorization
+@using AMSAReportingSystem.Services
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+@if (CurrentUser == null)
+{
+    <div class="alert alert-warning">Loading user info...</div>
+}
+else
+{
+    <div class="dashboard-header">
+        <h1>Welcome, @CurrentUser.FirstName!</h1>
+        <p class="text-muted">@GetRoleDescription()</p>
+    </div>
+
+    @if (CurrentUser.IsDepartmentOfficer)
+    {
+        <DepartmentOfficerDashboard CurrentUser="@CurrentUser" />
+    }
+    else if (CurrentUser.IsUnitPresident)
+    {
+        <UnitPresidentDashboard CurrentUser="@CurrentUser" />
+    }
+    else if (CurrentUser.IsStateGS || CurrentUser.IsStatePresident)
+    {
+        <StateGSDashboard CurrentUser="@CurrentUser" />
+    }
+    else if (CurrentUser.IsNationalLeadership)
+    {
+        <NationalDashboard CurrentUser="@CurrentUser" />
+    }
+    else
+    {
+        <div class="alert alert-warning">Your role is not yet configured for this system.</div>
+    }
+}
+
+<style>
+    .dashboard-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 40px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+    }
+
+    .dashboard-header h1 {
+        margin: 0 0 8px 0;
+        font-size: 32px;
+        font-weight: 700;
+    }
+
+    .dashboard-header .text-muted {
+        margin: 0;
+        opacity: 0.9;
+    }
+</style>
+
+@code {
+    private AuthContext? CurrentUser;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+        CurrentUser = amsaProvider.GetCurrentUser();
+        if (CurrentUser == null)
+        {
+            Nav.NavigateTo("/login", forceLoad: true);
+        }
+    }
+
+    private string GetRoleDescription()
+    {
+        if (CurrentUser?.IsDepartmentOfficer ?? false)
+            return "Department Officer";
+        else if (CurrentUser?.IsUnitPresident ?? false)
+            return "Unit President";
+        else if (CurrentUser?.IsStateGS ?? false)
+            return "State General Secretary";
+        else if (CurrentUser?.IsStatePresident ?? false)
+            return "State President";
+        else if (CurrentUser?.IsNationalGS ?? false)
+            return "National General Secretary";
+        else if (CurrentUser?.IsNationalLeadership ?? false)
+            return "National Leadership";
+        return "User";
+    }
+}
