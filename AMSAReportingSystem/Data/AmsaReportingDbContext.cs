@@ -242,6 +242,16 @@ public class AmsaReportingDbContext : DbContext
             entity.Property(e => e.FileType).IsRequired().HasMaxLength(50);
         });
 
+        // ===== FinanceReport Configuration =====
+        modelBuilder.Entity<FinanceReport>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.DuesCollected).HasPrecision(18, 2);
+            entity.Property(e => e.ExpectedDuesAmount).HasPrecision(18, 2);
+            entity.Property(e => e.DefaultersReason).HasMaxLength(1000);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
+        });
+
         // ===== Notification Configuration =====
         modelBuilder.Entity<Notification>(entity =>
         {
