@@ -32,7 +32,11 @@ builder.Services.AddHttpClient<IAmSaApiClient, AmSaApiClient>((serviceProvider, 
 
 // Add authentication services
 builder.Services.AddScoped<AmSaAuthService>();
-builder.Services.AddScoped<AuthenticationStateProvider, AmsaAuthStateProvider>();
+builder.Services.AddScoped<AmsaAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<AmsaAuthStateProvider>());
+builder.Services.AddScoped<ReportAccessService>();
+builder.Services.AddScoped<ReportService>();
+builder.Services.AddScoped<CurrentUserReportService>();
 builder.Services.AddAuthorizationCore();
 
 var app = builder.Build();

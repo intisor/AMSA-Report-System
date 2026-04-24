@@ -17,17 +17,6 @@ public class AmsaReportingDbContext : DbContext
     public DbSet<Report> Reports { get; set; }
     public DbSet<DepartmentReport> DepartmentReports { get; set; }
 
-    // Department-specific reports
-    public DbSet<TaleemReport> TaleemReports { get; set; }
-    public DbSet<TablighReport> TablighReports { get; set; }
-    public DbSet<WelfareReport> WelfareReports { get; set; }
-    public DbSet<SportReport> SportReports { get; set; }
-    public DbSet<FinanceReport> FinanceReports { get; set; }
-    public DbSet<HealthReport> HealthReports { get; set; }
-    public DbSet<SecondarySchoolReport> SecondarySchoolReports { get; set; }
-    public DbSet<TajneedReport> TajneedReports { get; set; }
-    public DbSet<GeneralReport> GeneralReports { get; set; }
-
     // State reports
     public DbSet<StateReport> StateReports { get; set; }
     public DbSet<StateReportActivity> StateReportActivities { get; set; }
@@ -126,52 +115,7 @@ public class AmsaReportingDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.ReportId);
             entity.HasIndex(e => new { e.ReportId, e.Department }).IsUnique();
-            
-            // One-to-one relationships with department-specific reports
-            entity.HasOne(e => e.TaleemReport)
-                .WithOne(tr => tr.DepartmentReport)
-                .HasForeignKey<TaleemReport>(tr => tr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasOne(e => e.TablighReport)
-                .WithOne(tr => tr.DepartmentReport)
-                .HasForeignKey<TablighReport>(tr => tr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasOne(e => e.WelfareReport)
-                .WithOne(wr => wr.DepartmentReport)
-                .HasForeignKey<WelfareReport>(wr => wr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasOne(e => e.SportReport)
-                .WithOne(sr => sr.DepartmentReport)
-                .HasForeignKey<SportReport>(sr => sr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasOne(e => e.FinanceReport)
-                .WithOne(fr => fr.DepartmentReport)
-                .HasForeignKey<FinanceReport>(fr => fr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasOne(e => e.HealthReport)
-                .WithOne(hr => hr.DepartmentReport)
-                .HasForeignKey<HealthReport>(hr => hr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasOne(e => e.SecondarySchoolReport)
-                .WithOne(ssr => ssr.DepartmentReport)
-                .HasForeignKey<SecondarySchoolReport>(ssr => ssr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasOne(e => e.TajneedReport)
-                .WithOne(tjr => tjr.DepartmentReport)
-                .HasForeignKey<TajneedReport>(tjr => tjr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
-            
-            entity.HasOne(e => e.GeneralReport)
-                .WithOne(gr => gr.DepartmentReport)
-                .HasForeignKey<GeneralReport>(gr => gr.DepartmentReportId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(e => e.ReportData).HasColumnType("nvarchar(max)");
         });
 
         // ===== StateReport Configuration =====
@@ -242,16 +186,6 @@ public class AmsaReportingDbContext : DbContext
             entity.Property(e => e.FileType).IsRequired().HasMaxLength(50);
         });
 
-        // ===== FinanceReport Configuration =====
-        modelBuilder.Entity<FinanceReport>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.DuesCollected).HasPrecision(18, 2);
-            entity.Property(e => e.ExpectedDuesAmount).HasPrecision(18, 2);
-            entity.Property(e => e.DefaultersReason).HasMaxLength(1000);
-            entity.Property(e => e.Notes).HasMaxLength(1000);
-        });
-
         // ===== Notification Configuration =====
         modelBuilder.Entity<Notification>(entity =>
         {
@@ -286,6 +220,8 @@ public class AmsaReportingDbContext : DbContext
 
     private void SeedData(ModelBuilder modelBuilder)
     {
+        var seedTimestamp = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
         // Seed all 36 Nigerian states + FCT
         var states = new List<State>
         {
@@ -327,6 +263,13 @@ public class AmsaReportingDbContext : DbContext
             new State { Id = 36, Name = "Yobe", Abbreviation = "YB" },
             new State { Id = 37, Name = "Zamfara", Abbreviation = "ZM" }
         };
+
+        foreach (var state in states)
+        {
+            state.CreatedAt = seedTimestamp;
+            state.UpdatedAt = seedTimestamp;
+        }
+
         modelBuilder.Entity<State>().HasData(states);
 
         // Seed a sample reporting cycle for January 2025
@@ -339,8 +282,8 @@ public class AmsaReportingDbContext : DbContext
                 EndDate = new DateTime(2025, 1, 31),
                 SubmissionDeadline = new DateTime(2025, 2, 7),
                 IsLocked = false,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = seedTimestamp,
+                UpdatedAt = seedTimestamp
             }
         );
     }

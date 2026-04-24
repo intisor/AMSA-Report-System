@@ -16,21 +16,21 @@ else
         <p class="text-muted">@GetRoleDescription()</p>
     </div>
 
-    @if (CurrentUser.IsDepartmentOfficer)
+    @if (CurrentUser.IsNationalLeadership)
     {
-        <DepartmentOfficerDashboard CurrentUser="@CurrentUser" />
-    }
-    else if (CurrentUser.IsUnitPresident)
-    {
-        <UnitPresidentDashboard CurrentUser="@CurrentUser" />
+        <NationalDashboard CurrentUser="@CurrentUser" />
     }
     else if (CurrentUser.IsStateGS || CurrentUser.IsStatePresident)
     {
         <StateGSDashboard CurrentUser="@CurrentUser" />
     }
-    else if (CurrentUser.IsNationalLeadership)
+    else if (CurrentUser.IsUnitPresident)
     {
-        <NationalDashboard CurrentUser="@CurrentUser" />
+        <UnitPresidentDashboard CurrentUser="@CurrentUser" />
+    }
+    else if (CurrentUser.IsDepartmentOfficer)
+    {
+        <DepartmentOfficerDashboard CurrentUser="@CurrentUser" />
     }
     else
     {

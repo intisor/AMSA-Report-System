@@ -1,296 +1,175 @@
+@using AMSAReportingSystem.Data.Entities
 @using AMSAReportingSystem.Services
+@inject CurrentUserReportService CurrentUserReportService
 
 <div class="container">
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">Unit Report Status - January 2025</h5>
-                </div>
-                <div class="card-body">
-                    <div class="alert alert-info mb-0">
-                        <strong>Status:</strong> 8 of 9 departments have submitted their sections
+    @if (IsLoading)
+    {
+        <div class="alert alert-info">Loading unit reports...</div>
+    }
+    else
+    {
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Unit Reports - @CycleLabel</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex gap-4">
+                            <div><strong>Total:</strong> @Reports.Count</div>
+                            <div><strong>Submitted:</strong> @Reports.Count(r => r.Status == ReportStatus.SubmittedToPresident)</div>
+                            <div><strong>Forwarded:</strong> @Reports.Count(r => r.Status == ReportStatus.SubmittedToState)</div>
+                            <div><strong>Rejected:</strong> @Reports.Count(r => r.Status == ReportStatus.RejectedByPresident)</div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Department Submissions</h5>
-                </div>
-                <div class="card-body">
-                    <div class="department-grid">
-                        @foreach (var dept in new[] { "Taleem", "Tabligh", "Welfare", "Sport", "Finance", "Health", "SecondarySchool", "Tajneed", "General" })
+        @if (!string.IsNullOrWhiteSpace(Message))
+        {
+            <div class="alert @MessageClass">@Message</div>
+        }
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Review Queue</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Report Id</th>
+                            <th>Status</th>
+                            <th>Submitted</th>
+                            <th>Departments</th>
+                            <th style="min-width: 260px;">Notes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Reports.Count == 0)
                         {
-                            var isCompliant = dept != "Finance"; // Finance is non-compliant for demo
-                            var isSubmitted = dept != "General"; // General not yet submitted
-                            
-                            <div class="dept-card @(isSubmitted ? "submitted" : "pending") @(isCompliant ? "compliant" : "warning")">
-                                <div class="dept-header">
-                                    <h6 class="mb-0">@dept</h6>
-                                    <span class="badge @GetStatusBadge(isSubmitted, isCompliant)">
-                                        @if (!isSubmitted)
+                            <tr><td colspan="6" class="text-center text-muted py-4">No reports yet for this cycle.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var report in Reports)
+                            {
+                                var submittedDepartments = report.DepartmentReports.Count(d => d.IsSubmitted);
+                                <tr>
+                                    <td><strong>#@report.Id</strong></td>
+                                    <td><span class="badge @GetStatusBadge(report.Status)">@report.Status</span></td>
+                                    <td>@(report.SubmittedToPresidentAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                                    <td>@submittedDepartments / @report.DepartmentReports.Count</td>
+                                    <td>
+                                        <input class="form-control form-control-sm"
+                                               placeholder="Optional note"
+                                               @bind="NotesByReport[report.Id]" />
+                                    </td>
+                                    <td>
+                                        @if (report.Status == ReportStatus.SubmittedToPresident)
                                         {
-                                            <span>Pending</span>
-                                        }
-                                        else if (isCompliant)
-                                        {
-                                            <span>✓ Compliant</span>
+                                            <div class="d-flex gap-2">
+                                                <button class="btn btn-sm btn-success" @onclick="() => Approve(report.Id)">Approve + Forward</button>
+                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Reject(report.Id)">Reject</button>
+                                            </div>
                                         }
                                         else
                                         {
-                                            <span>⚠ Review</span>
+                                            <span class="text-muted small">No action</span>
                                         }
-                                    </span>
-                                </div>
-                                @if (isSubmitted)
-                                {
-                                    <small class="text-muted d-block mb-2">Submitted Jan 28, 2025</small>
-                                }
-                                @if (!isCompliant && isSubmitted)
-                                {
-                                    <small class="text-warning d-block mb-2">
-                                        <strong>Issue:</strong> Collection rate below threshold
-                                    </small>
-                                }
-                            </div>
+                                    </td>
+                                </tr>
+                            }
                         }
-                    </div>
-                </div>
-            </div>
-
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h5 class="mb-0">Presidential Review</h5>
-                </div>
-                <div class="card-body">
-                    <div class="form-group mb-3">
-                        <label for="presNote" class="form-label">Your Comments</label>
-                        <textarea class="form-control" id="presNote" rows="4" placeholder="Add any comments or observations..."></textarea>
-                    </div>
-                    <button class="btn btn-success" @onclick="SubmitReport">
-                        ✓ Approve & Forward to State
-                    </button>
-                    <button class="btn btn-outline-secondary" @onclick="SaveAsDraft">
-                        Save as Draft
-                    </button>
-                </div>
+                    </tbody>
+                </table>
             </div>
         </div>
-
-        <div class="col-md-4">
-            <div class="card mb-3">
-                <div class="card-header bg-light">
-                    <h6 class="mb-0">Compliance Summary</h6>
-                </div>
-                <div class="card-body">
-                    <div class="compliance-stat">
-                        <div class="stat-label">Compliant</div>
-                        <div class="stat-value text-success">8</div>
-                    </div>
-                    <div class="compliance-stat">
-                        <div class="stat-label">Needs Review</div>
-                        <div class="stat-value text-warning">1</div>
-                    </div>
-                    <div class="compliance-stat">
-                        <div class="stat-label">Pending</div>
-                        <div class="stat-value text-secondary">0</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header bg-light">
-                    <h6 class="mb-0">Timeline</h6>
-                </div>
-                <div class="card-body">
-                    <div class="timeline">
-                        <div class="timeline-item">
-                            <div class="timeline-marker success"></div>
-                            <div class="timeline-content">
-                                <small class="text-muted">Jan 20</small>
-                                <p class="mb-0">Cycle opened</p>
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker success"></div>
-                            <div class="timeline-content">
-                                <small class="text-muted">Jan 28</small>
-                                <p class="mb-0">All sections submitted</p>
-                            </div>
-                        </div>
-                        <div class="timeline-item active">
-                            <div class="timeline-marker active"></div>
-                            <div class="timeline-content">
-                                <small class="text-muted">Now</small>
-                                <p class="mb-0"><strong>President reviews</strong></p>
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker"></div>
-                            <div class="timeline-content">
-                                <small class="text-muted">Feb 7</small>
-                                <p class="mb-0">State review</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    }
 </div>
-
-<style>
-    .department-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-        gap: 15px;
-    }
-
-    .dept-card {
-        padding: 15px;
-        border: 2px solid #e9ecef;
-        border-radius: 8px;
-        background: white;
-        transition: all 0.3s ease;
-    }
-
-    .dept-card.submitted {
-        background: #f0f7ff;
-        border-color: #667eea;
-    }
-
-    .dept-card.pending {
-        background: #fff8f0;
-        border-color: #ffc107;
-    }
-
-    .dept-card.compliant {
-        border-color: #28a745;
-    }
-
-    .dept-card.warning {
-        border-color: #ffc107;
-    }
-
-    .dept-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-    }
-
-    .dept-card h6 {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-    }
-
-    .badge {
-        font-size: 11px;
-        padding: 4px 6px;
-        white-space: nowrap;
-    }
-
-    .compliance-stat {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 0;
-        border-bottom: 1px solid #e9ecef;
-    }
-
-    .compliance-stat:last-child {
-        border-bottom: none;
-    }
-
-    .stat-label {
-        font-size: 13px;
-        color: #666;
-    }
-
-    .stat-value {
-        font-size: 20px;
-        font-weight: 700;
-    }
-
-    .timeline {
-        position: relative;
-        padding: 10px 0;
-    }
-
-    .timeline-item {
-        display: flex;
-        gap: 12px;
-        margin-bottom: 15px;
-        position: relative;
-    }
-
-    .timeline-item:not(:last-child)::after {
-        content: '';
-        position: absolute;
-        left: 6px;
-        top: 30px;
-        height: 20px;
-        width: 2px;
-        background: #e9ecef;
-    }
-
-    .timeline-item.active::after {
-        background: #667eea;
-    }
-
-    .timeline-marker {
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        background: #e9ecef;
-        flex-shrink: 0;
-        margin-top: 3px;
-    }
-
-    .timeline-marker.success {
-        background: #28a745;
-    }
-
-    .timeline-marker.active {
-        background: #667eea;
-        width: 16px;
-        height: 16px;
-        margin-top: 2px;
-    }
-
-    .timeline-content {
-        padding-top: 2px;
-    }
-
-    .timeline-content p {
-        margin: 0;
-        font-size: 13px;
-    }
-</style>
 
 @code {
     [Parameter]
     public AuthContext? CurrentUser { get; set; }
 
-    private void SubmitReport()
+    private bool IsLoading = true;
+    private string CycleLabel = "Active Cycle";
+    private string? Message;
+    private string MessageClass = "alert-info";
+    private List<Report> Reports = new();
+    private Dictionary<int, string> NotesByReport = new();
+
+    protected override async Task OnInitializedAsync()
     {
-        Console.WriteLine("Report approved and forwarded");
+        await LoadAsync();
     }
 
-    private void SaveAsDraft()
+    private async Task LoadAsync()
     {
-        Console.WriteLine("Report saved as draft");
+        IsLoading = true;
+        try
+        {
+            var cycle = await CurrentUserReportService.GetActiveCycleAsync();
+            CycleLabel = cycle.CycleMonth;
+            Reports = await CurrentUserReportService.GetMyUnitReportsAsync(cycle.Id);
+            NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
     }
 
-    private string GetStatusBadge(bool isSubmitted, bool isCompliant)
+    private async Task Approve(int reportId)
     {
-        if (!isSubmitted) return "bg-warning";
-        return isCompliant ? "bg-success" : "bg-danger";
+        try
+        {
+            await CurrentUserReportService.ApproveAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            SetMessage($"Report #{reportId} approved and forwarded to state.", true);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
     }
+
+    private async Task Reject(int reportId)
+    {
+        try
+        {
+            await CurrentUserReportService.RejectAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            SetMessage($"Report #{reportId} rejected to unit officer(s).", true);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+    }
+
+    private void SetMessage(string text, bool success)
+    {
+        Message = text;
+        MessageClass = success ? "alert-success" : "alert-danger";
+    }
+
+    private static string GetStatusBadge(ReportStatus status) => status switch
+    {
+        ReportStatus.Draft => "bg-secondary",
+        ReportStatus.SubmittedToPresident => "bg-info",
+        ReportStatus.RejectedByPresident => "bg-danger",
+        ReportStatus.SubmittedToState => "bg-primary",
+        ReportStatus.RejectedByState => "bg-danger",
+        ReportStatus.SubmittedToNational => "bg-dark",
+        ReportStatus.Acknowledged => "bg-success",
+        _ => "bg-secondary"
+    };
 }

@@ -109,6 +109,11 @@ public class DepartmentReport
     public int Id { get; set; }
     public int ReportId { get; set; }
     public DepartmentType Department { get; set; }
+    /// <summary>
+    /// Department-specific payload stored as JSON text.
+    /// This avoids schema churn for changing report questions/fields.
+    /// </summary>
+    public string? ReportData { get; set; }
     public bool IsSubmitted { get; set; } = false;
     public bool IsCompliant { get; set; } = false;
     public DateTime? SubmittedAt { get; set; }
@@ -118,15 +123,4 @@ public class DepartmentReport
 
     // Foreign keys
     public Report Report { get; set; } = null!;
-
-    // Navigation properties
-    public TaleemReport? TaleemReport { get; set; }
-    public TablighReport? TablighReport { get; set; }
-    public WelfareReport? WelfareReport { get; set; }
-    public SportReport? SportReport { get; set; }
-    public FinanceReport? FinanceReport { get; set; }
-    public HealthReport? HealthReport { get; set; }
-    public SecondarySchoolReport? SecondarySchoolReport { get; set; }
-    public TajneedReport? TajneedReport { get; set; }
-    public GeneralReport? GeneralReport { get; set; }
 }

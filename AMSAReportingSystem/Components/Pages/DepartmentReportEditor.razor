@@ -1,0 +1,165 @@
+@page "/report/{DepartmentSlug}"
+@using AMSAReportingSystem.Data.Entities
+@using AMSAReportingSystem.Services
+@inject CurrentUserReportService CurrentUserReportService
+@inject NavigationManager Nav
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<PageTitle>Department Report</PageTitle>
+
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">@DepartmentName Report</h3>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="BackToDashboard">Back</button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Message))
+    {
+        <div class="alert @MessageClass" role="alert">@Message</div>
+    }
+
+    @if (IsLoading)
+    {
+        <div class="alert alert-info">Loading report...</div>
+    }
+    else
+    {
+        <div class="card">
+            <div class="card-header">
+                <strong>JSON payload</strong>
+                <span class="text-muted ms-2">Keep it simple: valid JSON object only.</span>
+            </div>
+            <div class="card-body">
+                <textarea class="form-control font-monospace" rows="14" @bind="ReportJson"></textarea>
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <button class="btn btn-primary" @onclick="SaveDraftAsync" disabled="@IsSaving">Save Draft</button>
+                <button class="btn btn-success" @onclick="SubmitDepartmentAsync" disabled="@IsSaving">Submit Department</button>
+                <button class="btn btn-dark" @onclick="SubmitFullReportAsync" disabled="@IsSaving">Submit Full Report</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string DepartmentSlug { get; set; } = string.Empty;
+
+    private bool IsLoading = true;
+    private bool IsSaving;
+    private int _reportId;
+    private DepartmentType _department;
+    private string DepartmentName = "";
+    private string ReportJson = "{}";
+    private string? Message;
+    private string MessageClass = "alert-info";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!TryMapDepartment(DepartmentSlug, out _department))
+        {
+            Nav.NavigateTo("/dashboard");
+            return;
+        }
+
+        DepartmentName = _department.ToString();
+
+        try
+        {
+            if (!CurrentUserReportService.CanEditOwnUnitDepartment(_department))
+            {
+                Nav.NavigateTo("/dashboard", replace: true);
+                return;
+            }
+
+            var report = await CurrentUserReportService.GetOrCreateCurrentUserDraftAsync();
+            _reportId = report.Id;
+
+            var departmentReport = await CurrentUserReportService.GetDepartmentAsync(_reportId, _department);
+            ReportJson = string.IsNullOrWhiteSpace(departmentReport?.ReportData) ? "{}" : departmentReport!.ReportData!;
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task SaveDraftAsync()
+    {
+        await SaveInternalAsync(markSubmitted: false);
+    }
+
+    private async Task SubmitDepartmentAsync()
+    {
+        await SaveInternalAsync(markSubmitted: true);
+    }
+
+    private async Task SubmitFullReportAsync()
+    {
+        if (_reportId <= 0)
+        {
+            SetMessage("No report loaded.", false);
+            return;
+        }
+
+        IsSaving = true;
+        try
+        {
+            await CurrentUserReportService.SubmitReportToPresidentAsync(_reportId, "Submitted from editor");
+            SetMessage("Report submitted to president.", true);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private async Task SaveInternalAsync(bool markSubmitted)
+    {
+        if (_reportId <= 0)
+        {
+            SetMessage("No report loaded.", false);
+            return;
+        }
+
+        IsSaving = true;
+        try
+        {
+            await CurrentUserReportService.SaveDepartmentJsonAsync(_reportId, _department, ReportJson, markSubmitted);
+            SetMessage(markSubmitted ? "Department submitted." : "Draft saved.", true);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void SetMessage(string message, bool success)
+    {
+        Message = message;
+        MessageClass = success ? "alert-success" : "alert-danger";
+    }
+
+    private static bool TryMapDepartment(string slug, out DepartmentType department)
+    {
+        var normalized = slug?.Trim() ?? string.Empty;
+        return Enum.TryParse(normalized, ignoreCase: true, out department);
+    }
+
+    private void BackToDashboard()
+    {
+        Nav.NavigateTo("/dashboard");
+    }
+}

@@ -62,7 +62,7 @@ public class AmSaAuthService
                 StateId = member.Hierarchy.StateId,
                 StateName = member.Hierarchy.StateName,
                 Token = tokenResult.Data.Token,
-                TokenExpiry = DateTime.UtcNow.AddSeconds(tokenResult.Data.ExpiresIn),
+                TokenExpiry = DateTime.UtcNow.AddSeconds(tokenResult.Data.ExpiresIn ?? 3600),
                 Roles = member.Roles.Select(r => $"{r.DepartmentName}:{r.LevelType}").ToList()
             };
 
@@ -184,5 +184,7 @@ public class AuthContext
     /// </summary>
     public bool IsNationalLeadership => Roles.Any(r => r.EndsWith(":National", StringComparison.OrdinalIgnoreCase) || 
                                                         r.EndsWith(":NationalGS", StringComparison.OrdinalIgnoreCase) ||
-                                                        r.EndsWith(":NationalPresident", StringComparison.OrdinalIgnoreCase));
+                                                        r.EndsWith(":NationalPresident", StringComparison.OrdinalIgnoreCase) ||
+                                                        r.EndsWith(":AssistantGS", StringComparison.OrdinalIgnoreCase) ||
+                                                        r.EndsWith(":NationalAssistantGS", StringComparison.OrdinalIgnoreCase));
 }

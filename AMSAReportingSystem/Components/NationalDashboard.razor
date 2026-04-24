@@ -1,199 +1,153 @@
+@using AMSAReportingSystem.Data.Entities
 @using AMSAReportingSystem.Services
+@inject CurrentUserReportService CurrentUserReportService
 
 <div class="container">
-    <div class="alert alert-info">
-        <h5 class="alert-heading">National Dashboard</h5>
-        <p class="mb-0">View system-wide analytics, compliance summary, and escalations.</p>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="stat-card">
-                <div class="stat-number text-primary">36</div>
-                <div class="stat-label">States Reporting</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card">
-                <div class="stat-number text-success">450</div>
-                <div class="stat-label">Units Submitted</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card">
-                <div class="stat-number text-warning">50</div>
-                <div class="stat-label">Needs Attention</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card">
-                <div class="stat-number text-info">92%</div>
-                <div class="stat-label">Compliance Rate</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Compliance by Department</h5>
-                </div>
-                <div class="card-body">
-                    <div class="chart-placeholder">
-                        <p class="text-muted text-center mb-0">
-                            📊 Compliance Chart<br />
-                            <small>(Taleem: 88% | Tabligh: 95% | Welfare: 92% | Sport: 87% | Finance: 85% | ...)</small>
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Escalations - Requires National Support</h5>
-                </div>
-                <div class="list-group list-group-flush">
-                    @foreach (var esc in new[] {
-                        ("Oyo State", "Financial crisis affecting 3 units", "High"),
-                        ("Cross River State", "Leadership transition challenges", "Medium"),
-                        ("Bauchi State", "Insufficient participation in programs", "Medium"),
-                        ("Rivers State", "Compliance issues across multiple departments", "High"),
-                    })
-                    {
-                        <a href="#" class="list-group-item list-group-item-action">
-                            <div class="d-flex w-100 justify-content-between">
-                                <h6 class="mb-1">@esc.Item1</h6>
-                                <span class="badge @(esc.Item3 == "High" ? "bg-danger" : "bg-warning")">@esc.Item3</span>
-                            </div>
-                            <p class="mb-0 text-muted small">@esc.Item2</p>
-                        </a>
-                    }
-                </div>
-            </div>
+    @if (IsLoading)
+    {
+        <div class="alert alert-info">Loading national board...</div>
+    }
+    else
+    {
+        <div class="alert alert-info">
+            <h5 class="alert-heading mb-1">National Board - @CycleLabel</h5>
+            <p class="mb-0">Acknowledge reports submitted by states and monitor nationwide status.</p>
         </div>
 
-        <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">Submission Timeline</h5>
-                </div>
-                <div class="card-body">
-                    <div class="timeline-summary">
-                        <div class="timeline-entry">
-                            <span class="timeline-date">Jan 20</span>
-                            <span class="timeline-event">Cycle opened</span>
-                        </div>
-                        <div class="timeline-entry">
-                            <span class="timeline-date">Jan 28</span>
-                            <span class="timeline-event">450 reports submitted</span>
-                        </div>
-                        <div class="timeline-entry current">
-                            <span class="timeline-date">Now</span>
-                            <span class="timeline-event"><strong>Reviewing all reports</strong></span>
-                        </div>
-                        <div class="timeline-entry">
-                            <span class="timeline-date">Feb 7</span>
-                            <span class="timeline-event">Cycle closes</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        @if (!string.IsNullOrWhiteSpace(Message))
+        {
+            <div class="alert @MessageClass">@Message</div>
+        }
 
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Top Performing States</h5>
-                </div>
-                <div class="list-group list-group-flush">
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span>Lagos</span>
-                            <span class="badge bg-success">98%</span>
-                        </div>
-                    </div>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span>Ogun</span>
-                            <span class="badge bg-success">96%</span>
-                        </div>
-                    </div>
-                    <div class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <span>Kaduna</span>
-                            <span class="badge bg-success">94%</span>
-                        </div>
-                    </div>
-                </div>
+        <div class="row mb-3">
+            <div class="col-md-3"><strong>Total:</strong> @Reports.Count</div>
+            <div class="col-md-3"><strong>Awaiting National:</strong> @Reports.Count(r => r.Status == ReportStatus.SubmittedToNational)</div>
+            <div class="col-md-3"><strong>Acknowledged:</strong> @Reports.Count(r => r.Status == ReportStatus.Acknowledged)</div>
+            <div class="col-md-3"><strong>States:</strong> @Reports.Select(r => r.Unit.StateId).Distinct().Count()</div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">National Review Queue</h5>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>State</th>
+                            <th>Unit</th>
+                            <th>Status</th>
+                            <th>Forwarded By State</th>
+                            <th style="min-width: 260px;">National Note</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Reports.Count == 0)
+                        {
+                            <tr><td colspan="6" class="text-center text-muted py-4">No national reports found in this cycle.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var report in Reports)
+                            {
+                                <tr>
+                                    <td>@report.Unit.State.Name</td>
+                                    <td><strong>@report.Unit.Name</strong></td>
+                                    <td><span class="badge @GetStatusBadge(report.Status)">@report.Status</span></td>
+                                    <td>@(report.ApprovedByStateAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                                    <td>
+                                        <input class="form-control form-control-sm"
+                                               placeholder="Optional national note"
+                                               @bind="NotesByReport[report.Id]" />
+                                    </td>
+                                    <td>
+                                        @if (report.Status == ReportStatus.SubmittedToNational)
+                                        {
+                                            <button class="btn btn-sm btn-success" @onclick="() => Acknowledge(report.Id)">
+                                                Acknowledge
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted small">No action</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
-    </div>
+    }
 </div>
-
-<style>
-    .stat-card {
-        background: white;
-        border: 2px solid #e9ecef;
-        border-radius: 8px;
-        padding: 20px;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-
-    .stat-number {
-        font-size: 32px;
-        font-weight: 700;
-        margin: 0 0 10px 0;
-    }
-
-    .stat-label {
-        font-size: 14px;
-        color: #666;
-    }
-
-    .chart-placeholder {
-        min-height: 200px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f8f9fa;
-        border-radius: 8px;
-    }
-
-    .timeline-summary {
-        padding: 10px 0;
-    }
-
-    .timeline-entry {
-        display: flex;
-        gap: 12px;
-        margin-bottom: 15px;
-        padding-left: 12px;
-        border-left: 3px solid #e9ecef;
-    }
-
-    .timeline-entry.current {
-        border-left-color: #667eea;
-        background: #f8f9ff;
-        padding: 10px;
-        border-radius: 4px;
-        margin-left: -10px;
-        padding-left: 12px;
-    }
-
-    .timeline-date {
-        font-size: 12px;
-        font-weight: 600;
-        color: #667eea;
-        min-width: 50px;
-    }
-
-    .timeline-event {
-        font-size: 13px;
-        color: #333;
-    }
-</style>
 
 @code {
     [Parameter]
     public AuthContext? CurrentUser { get; set; }
+
+    private bool IsLoading = true;
+    private string CycleLabel = "Active Cycle";
+    private string? Message;
+    private string MessageClass = "alert-info";
+    private List<Report> Reports = new();
+    private Dictionary<int, string> NotesByReport = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        IsLoading = true;
+        try
+        {
+            var cycle = await CurrentUserReportService.GetActiveCycleAsync();
+            CycleLabel = cycle.CycleMonth;
+            Reports = await CurrentUserReportService.GetNationalReportsAsync(cycle.Id);
+            NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task Acknowledge(int reportId)
+    {
+        try
+        {
+            await CurrentUserReportService.AcknowledgeAtNationalAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            SetMessage($"Report #{reportId} acknowledged by national leadership.", true);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+    }
+
+    private void SetMessage(string text, bool success)
+    {
+        Message = text;
+        MessageClass = success ? "alert-success" : "alert-danger";
+    }
+
+    private static string GetStatusBadge(ReportStatus status) => status switch
+    {
+        ReportStatus.Draft => "bg-secondary",
+        ReportStatus.SubmittedToPresident => "bg-info",
+        ReportStatus.RejectedByPresident => "bg-danger",
+        ReportStatus.SubmittedToState => "bg-primary",
+        ReportStatus.RejectedByState => "bg-danger",
+        ReportStatus.SubmittedToNational => "bg-dark",
+        ReportStatus.Acknowledged => "bg-success",
+        _ => "bg-secondary"
+    };
 }

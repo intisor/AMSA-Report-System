@@ -81,9 +81,9 @@ public class Result<T>
 /// </summary>
 public class TokenResponse
 {
-    public required string Token { get; set; }
-    public required string TokenType { get; set; } = "Bearer";
-    public required int ExpiresIn { get; set; }
+    public string Token { get; set; } = string.Empty;
+    public string TokenType { get; set; } = "Bearer";
+    public int? ExpiresIn { get; set; }
 }
 
 /// <summary>
