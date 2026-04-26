@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.JSInterop;
 using System.Security.Claims;
+using System.Text.Json;
 
 namespace AMSAReportingSystem.Services;
 
@@ -9,13 +11,16 @@ namespace AMSAReportingSystem.Services;
 /// </summary>
 public class AmsaAuthStateProvider : AuthenticationStateProvider
 {
+    private const string AuthStorageKey = "amsa.auth.context";
     private readonly AmSaAuthService _authService;
+    private readonly IJSRuntime _jsRuntime;
     private readonly ILogger<AmsaAuthStateProvider> _logger;
     private AuthContext? _currentUser;
 
-    public AmsaAuthStateProvider(AmSaAuthService authService, ILogger<AmsaAuthStateProvider> logger)
+    public AmsaAuthStateProvider(AmSaAuthService authService, IJSRuntime jsRuntime, ILogger<AmsaAuthStateProvider> logger)
     {
         _authService = authService;
+        _jsRuntime = jsRuntime;
         _logger = logger;
     }
 
@@ -53,6 +58,7 @@ public class AmsaAuthStateProvider : AuthenticationStateProvider
             }
 
             _currentUser = result;
+            await PersistAuthStateAsync(result);
             _logger.LogInformation("User {FirstName} {LastName} logged in successfully", result.FirstName, result.LastName);
 
             // Notify Blazor of auth state change
@@ -76,6 +82,7 @@ public class AmsaAuthStateProvider : AuthenticationStateProvider
         }
 
         _currentUser = null;
+        await ClearAuthStateAsync();
         await Task.CompletedTask;
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
@@ -91,10 +98,68 @@ public class AmsaAuthStateProvider : AuthenticationStateProvider
     /// </summary>
     private async Task<AuthContext?> RestoreAuthStateAsync()
     {
-        // In a real app, check localStorage for JWT and validate
-        // For now, return null to require re-login
-        await Task.CompletedTask;
-        return null;
+        try
+        {
+            var json = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", AuthStorageKey);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            var user = JsonSerializer.Deserialize<AuthContext>(json);
+            if (user is null || !user.IsTokenValid)
+            {
+                await ClearAuthStateAsync();
+                return null;
+            }
+
+            return user;
+        }
+        catch (InvalidOperationException)
+        {
+            // JS runtime may not be available yet in early render.
+            return null;
+        }
+        catch (JSException)
+        {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to restore auth state from local storage");
+            return null;
+        }
+    }
+
+    private async Task PersistAuthStateAsync(AuthContext context)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(context);
+            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", AuthStorageKey, json);
+        }
+        catch (InvalidOperationException)
+        {
+            // JS runtime may not be available yet in early render.
+        }
+        catch (JSException)
+        {
+            // Ignore storage failures for now.
+        }
+    }
+
+    private async Task ClearAuthStateAsync()
+    {
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", AuthStorageKey);
+        }
+        catch (InvalidOperationException)
+        {
+        }
+        catch (JSException)
+        {
+        }
     }
 
     /// <summary>

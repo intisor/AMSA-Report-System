@@ -65,6 +65,7 @@ public class ReportService
             _db.DepartmentReports.Add(new DepartmentReport
             {
                 ReportId = report.Id,
+                CycleId = report.CycleId,
                 Department = department,
                 ReportData = "{}",
                 IsSubmitted = false,
@@ -232,6 +233,8 @@ public class ReportService
         }
 
         departmentReport.ReportData = reportDataJson;
+        departmentReport.CycleId = report.CycleId;
+        ApplyExtractedFields(departmentReport, reportDataJson);
         departmentReport.UpdatedAt = DateTime.UtcNow;
 
         if (markSubmitted)
@@ -511,6 +514,83 @@ public class ReportService
         _db.Units.Add(unit);
         await _db.SaveChangesAsync(ct);
         return unit;
+    }
+
+    private static void ApplyExtractedFields(DepartmentReport row, string reportDataJson)
+    {
+        using var doc = JsonDocument.Parse(reportDataJson);
+        var root = doc.RootElement;
+
+        row.SessionsOrganized = GetInt(root, "sessionsOrganized");
+        row.AttendanceCount = GetInt(root, "attendanceCount");
+        row.TotalMemberCount = GetInt(root, "totalMemberCount");
+        row.HasOnCampusActivity = GetBool(root, "hasOnCampusActivity");
+        row.ProgramCount = GetInt(root, "programCount");
+        row.MemberParticipantCount = GetInt(root, "memberParticipantCount");
+        row.DuesCollected = GetDecimal(root, "duesCollected");
+        row.ExpectedDues = GetDecimal(root, "expectedDues");
+        row.BeneficiaryCount = GetInt(root, "beneficiaryCount");
+
+        row.IsCompliant = ComputeCompliance(row);
+    }
+
+    private static bool ComputeCompliance(DepartmentReport row)
+    {
+        return row.Department switch
+        {
+            DepartmentType.Taleem => (row.SessionsOrganized ?? 0) >= 4 &&
+                                     MeetsPercent(row.AttendanceCount, row.TotalMemberCount, 75m),
+            DepartmentType.Tabligh => row.HasOnCampusActivity == true,
+            DepartmentType.Welfare => (row.ProgramCount ?? 0) >= 2,
+            DepartmentType.Sport => MeetsPercent(row.MemberParticipantCount, row.TotalMemberCount, 75m),
+            DepartmentType.Finance => (row.ExpectedDues ?? 0m) <= 0m ||
+                                      (row.DuesCollected ?? 0m) >= (row.ExpectedDues ?? 0m),
+            DepartmentType.Health => true,
+            DepartmentType.SecondarySchool => true,
+            DepartmentType.Tajneed => true,
+            DepartmentType.General => true,
+            _ => row.IsCompliant
+        };
+    }
+
+    private static bool MeetsPercent(int? numerator, int? denominator, decimal percent)
+    {
+        if (!numerator.HasValue || !denominator.HasValue || denominator.Value <= 0) return false;
+        return (numerator.Value * 100m / denominator.Value) >= percent;
+    }
+
+    private static int? GetInt(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var prop)) return null;
+        return prop.ValueKind switch
+        {
+            JsonValueKind.Number when prop.TryGetInt32(out var v) => v,
+            JsonValueKind.String when int.TryParse(prop.GetString(), out var v) => v,
+            _ => null
+        };
+    }
+
+    private static decimal? GetDecimal(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var prop)) return null;
+        return prop.ValueKind switch
+        {
+            JsonValueKind.Number when prop.TryGetDecimal(out var v) => v,
+            JsonValueKind.String when decimal.TryParse(prop.GetString(), out var v) => v,
+            _ => null
+        };
+    }
+
+    private static bool? GetBool(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out var prop)) return null;
+        return prop.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String when bool.TryParse(prop.GetString(), out var v) => v,
+            _ => null
+        };
     }
 
     private static void ValidateJson(string json)

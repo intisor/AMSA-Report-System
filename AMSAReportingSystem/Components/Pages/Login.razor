@@ -24,20 +24,7 @@
                         @bind="MkanId"
                         disabled="@IsLoading"
                     />
-                    <small class="text-muted d-block mt-1">Test IDs: 10001 (Officer), 10002 (President), 20001 (State GS), 30001 (National GS), 30002 (National Pres)</small>
-                </div>
-
-                <div class="form-group mb-3">
-                    <label for="password" class="form-label">Password</label>
-                    <input 
-                        type="password" 
-                        class="form-control form-control-lg" 
-                        id="password" 
-                        placeholder="Enter your password"
-                        @bind="Password"
-                        disabled="@IsLoading"
-                    />
-                    <small class="text-muted d-block mt-1">Any password will work for demo</small>
+                    <small class="text-muted d-block mt-1">Use your AMSA MKAN ID.</small>
                 </div>
 
                 @if (!string.IsNullOrEmpty(ErrorMessage))
@@ -64,7 +51,7 @@
 
         <div class="login-footer">
             <p class="text-muted text-center mb-0">
-                This is a proof-of-concept interface. No real data is persisted.
+                Secure sign-in powered by AMSA API.
             </p>
         </div>
     </div>
@@ -137,7 +124,6 @@
 
 @code {
     private string? MkanId;
-    private string? Password;
     private string? ErrorMessage;
     private bool IsLoading;
 
@@ -148,14 +134,14 @@
             IsLoading = true;
             ErrorMessage = null;
 
-            if (string.IsNullOrWhiteSpace(MkanId) || string.IsNullOrWhiteSpace(Password))
+            if (string.IsNullOrWhiteSpace(MkanId))
             {
-                ErrorMessage = "Please enter both MKAN ID and password";
+                ErrorMessage = "Please enter your MKAN ID";
                 return;
             }
 
             var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
-            await amsaProvider.LoginAsync(MkanId);
+            await amsaProvider.LoginAsync(MkanId.Trim());
             Nav.NavigateTo("/dashboard", forceLoad: false);
         }
         catch (InvalidOperationException ex)

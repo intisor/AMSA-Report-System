@@ -4,6 +4,7 @@ using AMSAReportingSystem.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AMSAReportingSystem.Migrations
 {
     [DbContext(typeof(AmsaReportingDbContext))]
-    partial class AmsaReportingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260425105527_AddHybridAnalyticsFields")]
+    partial class AddHybridAnalyticsFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

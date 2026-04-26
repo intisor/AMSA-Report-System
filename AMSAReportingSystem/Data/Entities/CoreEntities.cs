@@ -108,12 +108,24 @@ public class DepartmentReport
 {
     public int Id { get; set; }
     public int ReportId { get; set; }
+    public int? CycleId { get; set; } // denormalized for analytics
     public DepartmentType Department { get; set; }
     /// <summary>
     /// Department-specific payload stored as JSON text.
     /// This avoids schema churn for changing report questions/fields.
     /// </summary>
     public string? ReportData { get; set; }
+
+    // Extracted analytics/compliance fields (hybrid model with ReportData JSON)
+    public int? SessionsOrganized { get; set; }
+    public int? AttendanceCount { get; set; }
+    public int? TotalMemberCount { get; set; }
+    public bool? HasOnCampusActivity { get; set; }
+    public int? ProgramCount { get; set; }
+    public int? MemberParticipantCount { get; set; }
+    public decimal? DuesCollected { get; set; }
+    public decimal? ExpectedDues { get; set; }
+    public int? BeneficiaryCount { get; set; }
     public bool IsSubmitted { get; set; } = false;
     public bool IsCompliant { get; set; } = false;
     public DateTime? SubmittedAt { get; set; }

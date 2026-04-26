@@ -1,4 +1,6 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@using AMSAReportingSystem.Services
+@inject AmsaApiConnectionStatus ApiStatus
 
 <div class="d-flex flex-column min-vh-100">
     <!-- Navigation -->
@@ -8,6 +10,7 @@
                 <span style="font-size: 1.5rem; margin-right: 10px;">📋</span>
                 <strong>AMSA</strong> Reporting
             </a>
+            <span class="badge @GetAmsaBadgeClass() me-3">@GetAmsaBadgeText()</span>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -64,3 +67,25 @@
         flex-direction: column;
     }
 </style>
+
+@code {
+    private string GetAmsaBadgeText()
+    {
+        if (!ApiStatus.IsChecked)
+        {
+            return "Checking AMSA API...";
+        }
+
+        return ApiStatus.IsConnected ? "Connected to AMSA API" : "AMSA API unavailable";
+    }
+
+    private string GetAmsaBadgeClass()
+    {
+        if (!ApiStatus.IsChecked)
+        {
+            return "bg-secondary";
+        }
+
+        return ApiStatus.IsConnected ? "bg-success" : "bg-danger";
+    }
+}

@@ -19,6 +19,7 @@ public class AmsaReportingDbContext : DbContext
 
     // State reports
     public DbSet<StateReport> StateReports { get; set; }
+    public DbSet<StateReportProgram> StateReportPrograms { get; set; }
     public DbSet<StateReportActivity> StateReportActivities { get; set; }
     public DbSet<StateReportAttachment> StateReportAttachments { get; set; }
     public DbSet<StateReportActivityLog> StateReportActivityLogs { get; set; }
@@ -114,8 +115,11 @@ public class AmsaReportingDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.ReportId);
+            entity.HasIndex(e => e.CycleId);
             entity.HasIndex(e => new { e.ReportId, e.Department }).IsUnique();
             entity.Property(e => e.ReportData).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.DuesCollected).HasPrecision(18, 2);
+            entity.Property(e => e.ExpectedDues).HasPrecision(18, 2);
         });
 
         // ===== StateReport Configuration =====
@@ -129,9 +133,14 @@ public class AmsaReportingDbContext : DbContext
             entity.Property(e => e.UnitImprovementPlan).HasMaxLength(2000);
             entity.Property(e => e.ChallengesFaced).HasMaxLength(2000);
             entity.Property(e => e.NationalSupportNeeded).HasMaxLength(2000);
+            entity.Property(e => e.UnitPerformanceRating);
             entity.HasMany(e => e.Activities)
                 .WithOne(a => a.StateReport)
                 .HasForeignKey(a => a.StateReportId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(e => e.Programs)
+                .WithOne(p => p.StateReport)
+                .HasForeignKey(p => p.StateReportId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasMany(e => e.Attachments)
                 .WithOne(a => a.StateReport)
@@ -141,6 +150,16 @@ public class AmsaReportingDbContext : DbContext
                 .WithOne(al => al.StateReport)
                 .HasForeignKey(al => al.StateReportId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ===== StateReportProgram Configuration =====
+        modelBuilder.Entity<StateReportProgram>(entity =>
+        {
+            entity.HasKey(e => e.ProgramId);
+            entity.HasIndex(e => e.StateReportId);
+            entity.Property(e => e.ProgramName).IsRequired().HasMaxLength(300);
+            entity.Property(e => e.Objectives).HasMaxLength(1000);
+            entity.Property(e => e.Outcomes).HasMaxLength(1000);
         });
 
         // ===== StateReportActivity Configuration =====

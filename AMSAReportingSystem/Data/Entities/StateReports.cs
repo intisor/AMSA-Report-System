@@ -49,8 +49,26 @@ public class StateReport
 
     // Navigation properties
     public ICollection<StateReportActivity> Activities { get; set; } = new List<StateReportActivity>();
+    public ICollection<StateReportProgram> Programs { get; set; } = new List<StateReportProgram>();
     public ICollection<StateReportAttachment> Attachments { get; set; } = new List<StateReportAttachment>();
     public ICollection<StateReportActivityLog> ActivityLogs { get; set; } = new List<StateReportActivityLog>();
+}
+
+/// <summary>
+/// Normalized programs for state report aggregation/analytics
+/// </summary>
+public class StateReportProgram
+{
+    public int ProgramId { get; set; }
+    public int StateReportId { get; set; }
+    public string ProgramName { get; set; } = string.Empty;
+    public string? Objectives { get; set; }
+    public string? Outcomes { get; set; }
+    public int? TotalAttendance { get; set; }
+    public int? TotalBeneficiaries { get; set; }
+
+    // Foreign key
+    public StateReport StateReport { get; set; } = null!;
 }
 
 /// <summary>
