@@ -51,11 +51,10 @@
 - ✅ Added role helpers to `AuthContext`:
   - `IsAuthenticated`
   - `IsDepartmentOfficer`
-  - `IsUnitPresident`
-  - `IsStateGS`
-  - `IsStatePresident`
-  - `IsNationalGS`
+  - `IsUnitLeadership`
+  - `IsStateLeadership`
   - `IsNationalLeadership`
+  - `HasSudoAccess` (President/General departments)
   - `HasRole(string)`
   - `GetDisplayName()`
   - `FullName`
@@ -252,7 +251,7 @@ public class AmSaReferenceDataService : BackgroundService
 - AMSA API Integration Contract: `docs/AMSA_API_INTEGRATION_CONTRACT.md`
 - Endpoint specifications: 9 endpoints documented with real request/response examples
 - Authentication flow: App-to-app model (ReportingApp calls AMSA API)
-- Role format: "DepartmentName:LevelType" (e.g., "Taleem:DepartmentOfficer")
+- Role format: "DepartmentName:LevelType" (e.g., "Taleem:Unit", "General:State", "President:National")
 
 ---
 

@@ -60,16 +60,14 @@
 
     private string GetRoleLabel()
     {
+        if (CurrentUser?.IsNationalLeadership ?? false)
+            return "National";
+        if (CurrentUser?.IsStateLeadership ?? false)
+            return "State";
+        if (CurrentUser?.IsUnitLeadership ?? false)
+            return "Unit";
         if (CurrentUser?.IsDepartmentOfficer ?? false)
             return "Officer";
-        else if (CurrentUser?.IsUnitPresident ?? false)
-            return "President";
-        else if (CurrentUser?.IsStateGS ?? false)
-            return "State GS";
-        else if (CurrentUser?.IsNationalGS ?? false)
-            return "National GS";
-        else if (CurrentUser?.IsNationalLeadership ?? false)
-            return "National";
         return "User";
     }
 

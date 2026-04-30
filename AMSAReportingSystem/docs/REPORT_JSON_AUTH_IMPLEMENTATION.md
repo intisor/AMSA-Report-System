@@ -79,13 +79,13 @@ Rules implemented exactly around your requested scopes:
 - National-level office holder for department: same department across all states.
 
 ### 3.2 Unit leadership
-- Unit President / Unit GS can edit all departments in their unit.
+- Unit-level leadership roles (e.g., President/General at `:Unit`) can edit all departments in their unit.
 
 ### 3.3 State leadership
-- State President / State GS can edit all departments for units in their state.
+- State-level leadership roles (e.g., President/General at `:State`) can edit all departments for units in their state.
 
 ### 3.4 National leadership
-- National President / National GS / Assistant GS can edit all departments across all units.
+- National-level leadership roles (e.g., President/General at `:National`) can edit all departments across all units.
 
 ### 3.5 Submission authorization
 Report submission uses the same scope intent:
@@ -200,11 +200,10 @@ After these changes:
 1. Department editor currently uses a fixed cycle id (`1`) for simplicity.
 2. JSON editor is raw payload mode (textarea), by design for fast delivery and flexibility.
 3. Access control is fully enforced at service level (not UI-only), so direct page calls still require permission.
-4. AMSA role matching currently uses string patterns like:
-   - `"Department:DepartmentOfficer"`
-   - `"President:UnitPresident"`
-   - `"GeneralSecretary:StateGS"`
-   adapt names if AMSA backend role naming changes.
+4. AMSA role matching currently uses the API role shape only:
+   - `"Department:LevelType"` where `LevelType` is one of `Unit`, `State`, `National`
+   - examples: `"Taleem:Unit"`, `"President:State"`, `"General:National"`
+   - adjust only if AMSA backend changes this contract.
 
 ---
 

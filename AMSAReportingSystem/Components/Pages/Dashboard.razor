@@ -16,19 +16,19 @@ else
         <p class="text-muted">@GetRoleDescription()</p>
     </div>
 
-    @if (CurrentUser.IsNationalLeadership)
+    @if (CurrentUser.GetDashboard() == "NationalDashboard")
     {
         <NationalDashboard CurrentUser="@CurrentUser" />
     }
-    else if (CurrentUser.IsStateGS || CurrentUser.IsStatePresident)
+    else if (CurrentUser.GetDashboard() == "StateDashboard")
     {
         <StateGSDashboard CurrentUser="@CurrentUser" />
     }
-    else if (CurrentUser.IsUnitPresident)
+    else if (CurrentUser.IsUnitLeadership)
     {
         <UnitPresidentDashboard CurrentUser="@CurrentUser" />
     }
-    else if (CurrentUser.IsDepartmentOfficer)
+    else if (CurrentUser.GetDashboard() == "UnitDashboard")
     {
         <DepartmentOfficerDashboard CurrentUser="@CurrentUser" />
     }
@@ -74,18 +74,16 @@ else
 
     private string GetRoleDescription()
     {
-        if (CurrentUser?.IsDepartmentOfficer ?? false)
-            return "Department Officer";
-        else if (CurrentUser?.IsUnitPresident ?? false)
-            return "Unit President";
-        else if (CurrentUser?.IsStateGS ?? false)
-            return "State General Secretary";
-        else if (CurrentUser?.IsStatePresident ?? false)
-            return "State President";
-        else if (CurrentUser?.IsNationalGS ?? false)
-            return "National General Secretary";
-        else if (CurrentUser?.IsNationalLeadership ?? false)
+        if (CurrentUser is null)
+            return "User";
+        if (CurrentUser.IsNationalLeadership)
             return "National Leadership";
+        if (CurrentUser.IsStateLeadership)
+            return "State Leadership";
+        if (CurrentUser.IsUnitLeadership)
+            return "Unit Leadership";
+        if (CurrentUser.ParsedRoles.Any(role => role.LevelType.Equals("Unit", StringComparison.OrdinalIgnoreCase)))
+            return "Department Officer";
         return "User";
     }
 }

@@ -13,7 +13,11 @@ public class AmSaApiClient : IAmSaApiClient
     private readonly HttpClient _httpClient;
     private readonly AmSaApiClientOptions _options;
     private readonly ILogger<AmSaApiClient> _logger;
-    private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
 
     public AmSaApiClient(HttpClient httpClient, IOptions<AmSaApiClientOptions> options, ILogger<AmSaApiClient> logger)
     {

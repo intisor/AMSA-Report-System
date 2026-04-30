@@ -5,13 +5,13 @@ namespace AMSAReportingSystem.Services;
 public class ReportAccessService
 {
     public bool IsNationalLeadership(AuthContext actor) =>
-        HasAnyLevel(actor, "NationalPresident", "NationalGS", "AssistantGS", "NationalAssistantGS");
+        HasLeadershipAtLevel(actor, "National") || actor.HasSudoAccess;
 
     public bool IsStateLeadership(AuthContext actor) =>
-        HasAnyLevel(actor, "StatePresident", "StateGS", "StateGeneralSecretary");
+        HasLeadershipAtLevel(actor, "State") || actor.HasSudoAccess;
 
     public bool IsUnitLeadership(AuthContext actor) =>
-        HasAnyLevel(actor, "UnitPresident", "UnitGS", "UnitGeneralSecretary");
+        HasLeadershipAtLevel(actor, "Unit") || actor.HasSudoAccess;
 
     public bool CanEditDepartment(AuthContext actor, int unitId, int stateId, DepartmentType department)
     {
@@ -35,24 +35,20 @@ public class ReportAccessService
             return true;
         }
 
-        // Department officers: same office only, with scope by level.
-        if (HasDepartmentRole(actor, departmentName, "DepartmentOfficer"))
+        // State office holders for same department across units in their state.
+        if (stateId == actor.StateId && HasDepartmentAtLevel(actor, departmentName, "State"))
         {
-            // Unit office can edit only inside own unit.
-            if (unitId == actor.UnitId)
-            {
-                return true;
-            }
+            return true;
         }
 
-        // State office holders for same department across units in their state.
-        if (stateId == actor.StateId && HasDepartmentAnyLevel(actor, departmentName, "State"))
+        // Unit office holders for same department inside own unit.
+        if (unitId == actor.UnitId && HasDepartmentAtLevel(actor, departmentName, "Unit"))
         {
             return true;
         }
 
         // National office holders for same department across all states.
-        if (HasDepartmentAnyLevel(actor, departmentName, "National"))
+        if (HasDepartmentAtLevel(actor, departmentName, "National"))
         {
             return true;
         }
@@ -77,8 +73,8 @@ public class ReportAccessService
             return true;
         }
 
-        // Unit officers can submit for their own unit.
-        return unitId == actor.UnitId && actor.Roles.Any(r => r.EndsWith(":DepartmentOfficer", StringComparison.OrdinalIgnoreCase));
+        // Unit-level officers can submit for their own unit.
+        return unitId == actor.UnitId && actor.ParsedRoles.Any(r => r.LevelType.Equals("Unit", StringComparison.OrdinalIgnoreCase));
     }
 
     public bool CanReviewAtUnitLevel(AuthContext actor, int unitId) =>
@@ -87,36 +83,42 @@ public class ReportAccessService
     public bool CanReviewAtStateLevel(AuthContext actor, int stateId) =>
         IsNationalLeadership(actor) || (stateId == actor.StateId && IsStateLeadership(actor));
 
-    private static bool HasAnyLevel(AuthContext actor, params string[] levelTypes)
+    private static bool HasLeadershipAtLevel(AuthContext actor, string levelType) =>
+        actor.ParsedRoles.Any(r =>
+            r.LevelType.Equals(levelType, StringComparison.OrdinalIgnoreCase)
+            && IsLeadershipDepartment(r.DepartmentName));
+
+    private static bool HasDepartmentAtLevel(AuthContext actor, string department, string levelType)
     {
-        return actor.Roles.Any(role =>
-        {
-            var split = role.Split(':', 2);
-            if (split.Length != 2) return false;
-            var level = split[1];
-            return levelTypes.Any(expected => level.Equals(expected, StringComparison.OrdinalIgnoreCase));
-        });
+        var normalizedTarget = NormalizeDepartmentName(department);
+        return actor.ParsedRoles.Any(r =>
+            r.LevelType.Equals(levelType, StringComparison.OrdinalIgnoreCase)
+            && NormalizeDepartmentName(r.DepartmentName).Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool HasDepartmentRole(AuthContext actor, string department, string level)
+    private static bool IsLeadershipDepartment(string departmentName)
     {
-        return actor.Roles.Any(role =>
-        {
-            var split = role.Split(':', 2);
-            if (split.Length != 2) return false;
-            return split[0].Equals(department, StringComparison.OrdinalIgnoreCase)
-                   && split[1].Equals(level, StringComparison.OrdinalIgnoreCase);
-        });
+        var normalized = NormalizeDepartmentName(departmentName);
+        return normalized is "president" or "general";
     }
 
-    private static bool HasDepartmentAnyLevel(AuthContext actor, string department, string levelContains)
+    private static string NormalizeDepartmentName(string name)
     {
-        return actor.Roles.Any(role =>
+        var normalized = name.Trim().ToLowerInvariant()
+            .Replace(" ", string.Empty)
+            .Replace("-", string.Empty)
+            .Replace("/", string.Empty);
+
+        if (normalized.StartsWith("assistant"))
         {
-            var split = role.Split(':', 2);
-            if (split.Length != 2) return false;
-            return split[0].Equals(department, StringComparison.OrdinalIgnoreCase)
-                   && split[1].Contains(levelContains, StringComparison.OrdinalIgnoreCase);
-        });
+            normalized = normalized["assistant".Length..];
+        }
+
+        return normalized switch
+        {
+            "secondaryschool" => "secondaryschool",
+            "generalsecretary" => "general",
+            _ => normalized
+        };
     }
 }

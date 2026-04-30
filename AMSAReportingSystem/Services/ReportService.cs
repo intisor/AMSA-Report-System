@@ -40,6 +40,7 @@ public class ReportService
 
         var existing = await _db.Reports
             .Include(r => r.DepartmentReports)
+            .Include(r => r.ActivityLogs)
             .FirstOrDefaultAsync(r => r.UnitId == unit.Id && r.CycleId == cycleId, ct);
 
         if (existing is not null)
@@ -199,6 +200,135 @@ public class ReportService
             .ToListAsync(ct);
     }
 
+    public async Task<StateReport> GetOrCreateStateReportAsync(AuthContext actor, int stateId, int cycleId, CancellationToken ct = default)
+    {
+        if (!_access.CanReviewAtStateLevel(actor, stateId))
+        {
+            throw new UnauthorizedAccessException("You are not allowed to manage this state report.");
+        }
+
+        var existing = await _db.StateReports
+            .Include(sr => sr.Programs)
+            .Include(sr => sr.ActivityLogs)
+            .FirstOrDefaultAsync(sr => sr.StateId == stateId && sr.CycleId == cycleId, ct);
+
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var report = new StateReport
+        {
+            StateId = stateId,
+            CycleId = cycleId,
+            Status = ReportStatus.Draft,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _db.StateReports.Add(report);
+        await _db.SaveChangesAsync(ct);
+
+        _db.StateReportActivityLogs.Add(new StateReportActivityLog
+        {
+            StateReportId = report.Id,
+            ActionByMemberId = actor.MemberId,
+            Action = "StateReportCreated",
+            ActionAt = DateTime.UtcNow
+        });
+        await _db.SaveChangesAsync(ct);
+
+        return await _db.StateReports
+            .Include(sr => sr.Programs)
+            .Include(sr => sr.ActivityLogs)
+            .FirstAsync(sr => sr.Id == report.Id, ct);
+    }
+
+    public async Task<StateReport?> GetStateReportAsync(int stateReportId, CancellationToken ct = default)
+    {
+        return await _db.StateReports
+            .Include(sr => sr.Programs)
+            .Include(sr => sr.ActivityLogs)
+            .FirstOrDefaultAsync(sr => sr.Id == stateReportId, ct);
+    }
+
+    public async Task<StateReport> SaveStateReportAsync(
+        AuthContext actor,
+        int stateReportId,
+        StateReportForm form,
+        bool markSubmitted,
+        CancellationToken ct = default)
+    {
+        var stateReport = await _db.StateReports
+            .Include(sr => sr.Programs)
+            .FirstOrDefaultAsync(sr => sr.Id == stateReportId, ct)
+            ?? throw new InvalidOperationException($"State report {stateReportId} not found.");
+
+        if (!_access.CanReviewAtStateLevel(actor, stateReport.StateId))
+        {
+            throw new UnauthorizedAccessException("You are not allowed to edit this state report.");
+        }
+
+        await EnsureCycleOpenForEditsAsync(stateReport.CycleId, ct);
+
+        if (stateReport.Status is ReportStatus.SubmittedToNational or ReportStatus.Acknowledged)
+        {
+            throw new InvalidOperationException("This state report has already been submitted and is read-only.");
+        }
+
+        ValidateStateReportForm(form);
+
+        stateReport.UnitPresidentsAttended = form.UnitPresidentsAttended;
+        stateReport.TotalUnitPresidents = form.TotalUnitPresidents;
+        stateReport.UnitPerformanceRating = form.UnitPerformanceRating;
+        stateReport.UnitImprovementPlan = form.UnitImprovementPlan;
+        stateReport.ChallengesFaced = form.ChallengesFaced;
+        stateReport.NationalSupportNeeded = form.NationalSupportNeeded;
+        stateReport.OtherNotes = form.OtherNotes;
+        stateReport.UpdatedAt = DateTime.UtcNow;
+
+        _db.StateReportPrograms.RemoveRange(stateReport.Programs);
+        var programs = form.Programs
+            .Where(p => !string.IsNullOrWhiteSpace(p.ProgramName)
+                        || !string.IsNullOrWhiteSpace(p.Objectives)
+                        || !string.IsNullOrWhiteSpace(p.Outcomes)
+                        || p.TotalAttendance.HasValue
+                        || p.TotalBeneficiaries.HasValue)
+            .Select(p => new StateReportProgram
+            {
+                StateReportId = stateReport.Id,
+                ProgramName = string.IsNullOrWhiteSpace(p.ProgramName) ? "Unnamed Program" : p.ProgramName.Trim(),
+                Objectives = p.Objectives,
+                Outcomes = p.Outcomes,
+                TotalAttendance = p.TotalAttendance,
+                TotalBeneficiaries = p.TotalBeneficiaries
+            })
+            .ToList();
+        _db.StateReportPrograms.AddRange(programs);
+
+        if (markSubmitted)
+        {
+            stateReport.Status = ReportStatus.SubmittedToNational;
+            stateReport.SubmittedAt = DateTime.UtcNow;
+            stateReport.SubmittedByMemberId = actor.MemberId;
+        }
+
+        _db.StateReportActivityLogs.Add(new StateReportActivityLog
+        {
+            StateReportId = stateReport.Id,
+            ActionByMemberId = actor.MemberId,
+            Action = markSubmitted ? "StateReportSubmittedToNational" : "StateReportSaved",
+            ActionAt = DateTime.UtcNow
+        });
+
+        await _db.SaveChangesAsync(ct);
+
+        return await _db.StateReports
+            .Include(sr => sr.Programs)
+            .Include(sr => sr.ActivityLogs)
+            .FirstAsync(sr => sr.Id == stateReport.Id, ct);
+    }
+
     public async Task<DepartmentReport> SaveDepartmentDataAsync(
         int reportId,
         DepartmentType department,
@@ -211,6 +341,7 @@ public class ReportService
 
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
+        await EnsureCycleOpenForEditsAsync(report.CycleId, ct);
         var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
 
         if (!_access.CanEditDepartment(actor, unit.Id, unit.StateId, department))
@@ -264,6 +395,7 @@ public class ReportService
             .Include(r => r.DepartmentReports)
             .FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
+        await EnsureCycleOpenForEditsAsync(report.CycleId, ct);
 
         var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
         if (!_access.CanSubmitReportToPresident(actor, unit.Id, unit.StateId))
@@ -602,6 +734,52 @@ public class ReportService
         catch (JsonException ex)
         {
             throw new InvalidOperationException("Invalid JSON payload for department report.", ex);
+        }
+    }
+
+    private async Task EnsureCycleOpenForEditsAsync(int cycleId, CancellationToken ct)
+    {
+        var cycle = await _db.ReportingCycles.FirstOrDefaultAsync(c => c.Id == cycleId, ct)
+            ?? throw new InvalidOperationException($"Reporting cycle {cycleId} was not found.");
+
+        var isPastDeadline = DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
+        if (isPastDeadline && !cycle.IsLocked)
+        {
+            cycle.IsLocked = true;
+            cycle.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        if (cycle.IsLocked || isPastDeadline)
+        {
+            throw new InvalidOperationException(
+                $"This reporting cycle is locked. Submission deadline was {cycle.SubmissionDeadline:MMMM d, yyyy}.");
+        }
+    }
+
+    private static void ValidateStateReportForm(StateReportForm form)
+    {
+        if (form.UnitPresidentsAttended < 0 || form.TotalUnitPresidents < 0)
+        {
+            throw new InvalidOperationException("Attendance values cannot be negative.");
+        }
+
+        if (form.UnitPresidentsAttended > form.TotalUnitPresidents)
+        {
+            throw new InvalidOperationException("Unit presidents attended cannot exceed total unit presidents.");
+        }
+
+        if (form.UnitPerformanceRating is < 0 or > 100)
+        {
+            throw new InvalidOperationException("Unit performance rating must be between 0 and 100.");
+        }
+
+        foreach (var program in form.Programs)
+        {
+            if (program.TotalAttendance < 0 || program.TotalBeneficiaries < 0)
+            {
+                throw new InvalidOperationException("Program attendance and beneficiaries cannot be negative.");
+            }
         }
     }
 }

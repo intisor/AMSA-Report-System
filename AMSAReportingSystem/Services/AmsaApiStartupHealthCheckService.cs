@@ -27,7 +27,7 @@ public class AmsaApiStartupHealthCheckService : IHostedService
         {
             var client = _httpClientFactory.CreateClient();
             client.BaseAddress = new Uri(_options.BaseUrl);
-            client.Timeout = TimeSpan.FromSeconds(Math.Min(10, _options.RequestTimeoutSeconds));
+            client.Timeout = TimeSpan.FromSeconds(Math.Min(300, _options.RequestTimeoutSeconds));
 
             using var request = new HttpRequestMessage(HttpMethod.Get, "/");
             using var response = await client.SendAsync(request, cancellationToken);

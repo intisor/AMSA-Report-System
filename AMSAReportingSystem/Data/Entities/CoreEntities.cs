@@ -136,3 +136,17 @@ public class DepartmentReport
     // Foreign keys
     public Report Report { get; set; } = null!;
 }
+
+/// <summary>
+/// Represents a role with department and level type
+/// </summary>
+public class Role
+{
+    public string DepartmentName { get; set; } = string.Empty;
+    public string LevelType { get; set; } = string.Empty;
+
+    public (string DepartmentName, string LevelType) ParseRole()
+    {
+        return (DepartmentName, LevelType);
+    }
+}

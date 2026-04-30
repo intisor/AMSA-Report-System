@@ -119,15 +119,36 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
-        CurrentUser = amsaProvider.GetCurrentUser();
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
 
-        if (CurrentUser?.IsAuthenticated ?? false)
+        if (user.Identity?.IsAuthenticated == true)
         {
-            // Redirect authenticated users to their dashboard
-            await Task.Delay(1000);
-            Nav.NavigateTo("/dashboard", replace: true);
+            var roles = user.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
+            CurrentUser = new AuthContext
+            {
+                MkanId = 0, // Replace with actual value
+                FirstName = user.Identity.Name ?? "Unknown",
+                LastName = "", // Replace with actual value
+                Email = user.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value ?? "",
+                UnitName = "", // Replace with actual value
+                StateName = "", // Replace with actual value
+                NationalName = "", // Replace with actual value
+                Token = "", // Replace with actual value
+                Roles = roles.Select(role => ParseRole(role)).Select(parsed => $"{parsed.DepartmentName}:{parsed.LevelType}").ToList()
+            };
         }
+    }
+
+    private (string DepartmentName, string LevelType) ParseRole(string role)
+    {
+        var parts = role.Split(':');
+        if (parts.Length != 2)
+        {
+            throw new FormatException($"Invalid role format: {role}");
+        }
+
+        return (parts[0], parts[1]);
     }
 
     private void GoToLogin()

@@ -24,9 +24,9 @@ public class AmSaApiClientOptions
     public required string AppSecret { get; set; }
 
     /// <summary>
-    /// HTTP request timeout in seconds (default: 30)
+    /// HTTP request timeout in seconds (default: 300)
     /// </summary>
-    public int RequestTimeoutSeconds { get; set; } = 30;
+    public int RequestTimeoutSeconds { get; set; } = 300;
 
     /// <summary>
     /// Resilience policy configuration for retry and circuit breaker

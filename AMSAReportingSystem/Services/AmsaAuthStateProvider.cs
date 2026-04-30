@@ -172,7 +172,7 @@ public class AmsaAuthStateProvider : AuthenticationStateProvider
         {
             new Claim(ClaimTypes.NameIdentifier, user.MemberId.ToString()),
             new Claim(ClaimTypes.Name, user.GetDisplayName()),
-            new Claim("mkanId", user.MkanId),
+            new Claim("mkanId", user.MkanId.ToString()),
             new Claim("firstName", user.FirstName),
             new Claim("lastName", user.LastName),
             new Claim("email", user.Email),

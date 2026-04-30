@@ -9,7 +9,10 @@
 
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h3 class="mb-0">@DepartmentName Report</h3>
+        <div>
+            <h3 class="mb-0">@DepartmentName Report</h3>
+            <small class="text-muted">@CycleLabel · Deadline: @DeadlineLabel</small>
+        </div>
         <button class="btn btn-outline-secondary btn-sm" @onclick="BackToDashboard">Back</button>
     </div>
 
@@ -20,22 +23,197 @@
 
     @if (IsLoading)
     {
-        <div class="alert alert-info">Loading report...</div>
+        <div class="alert alert-info">Loading report form...</div>
     }
     else
     {
+        @if (IsCycleLocked)
+        {
+            <div class="alert alert-warning">
+                This reporting cycle is locked. Submissions are read-only after deadline.
+            </div>
+        }
+
+        <div class="mb-3">
+            <span class="badge @(DepartmentSubmitted ? "bg-success" : "bg-warning text-dark")">
+                @(DepartmentSubmitted ? "Department Submitted" : "Draft")
+            </span>
+        </div>
+
         <div class="card">
             <div class="card-header">
-                <strong>JSON payload</strong>
-                <span class="text-muted ms-2">Keep it simple: valid JSON object only.</span>
+                <strong>Department Questions</strong>
             </div>
             <div class="card-body">
-                <textarea class="form-control font-monospace" rows="14" @bind="ReportJson"></textarea>
+                @if (_department == DepartmentType.Taleem)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Average number of AMSA members that participated in Ta'leem sessions this month</label>
+                        <input type="number" class="form-control" min="0" @bind="Taleem.AttendanceCount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Total member count (for % calculation)</label>
+                        <input type="number" class="form-control" min="0" @bind="Taleem.TotalMemberCount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">If below 75%, give reasons</label>
+                        <textarea class="form-control" rows="3" @bind="Taleem.BelowSeventyFiveReasons"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">How long in minutes was spent in Taleem class</label>
+                        <input type="number" class="form-control" min="0" @bind="Taleem.SessionDurationMinutes" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">How many members did the monthly test</label>
+                        <input type="number" class="form-control" min="0" @bind="Taleem.MonthlyTestParticipants" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">How many Ta'leem sessions were organised in your unit</label>
+                        <input type="number" class="form-control" min="0" @bind="Taleem.SessionsOrganized" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes (include mosque session details)</label>
+                        <textarea class="form-control" rows="3" @bind="Taleem.Notes"></textarea>
+                    </div>
+                }
+                else if (_department == DepartmentType.Tabligh)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">What were the Tabligh activities carried out? Give concise details</label>
+                        <textarea class="form-control" rows="4" @bind="Tabligh.ActivitiesDetails"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">What was the purpose</label>
+                        <textarea class="form-control" rows="3" @bind="Tabligh.Purpose"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">How many people attended</label>
+                        <input type="number" class="form-control" min="0" @bind="Tabligh.AttendeeCount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Who were the beneficiaries</label>
+                        <textarea class="form-control" rows="3" @bind="Tabligh.Beneficiaries"></textarea>
+                    </div>
+                    <div class="alert @(HasOnCampusActivityPreview ? "alert-success" : "alert-warning") py-2 mb-0">
+                        On-campus activity detected from your response: <strong>@(HasOnCampusActivityPreview ? "Yes" : "No")</strong>
+                    </div>
+                }
+                else if (_department == DepartmentType.Welfare)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">How many welfare programs did you hold this month</label>
+                        <input type="number" class="form-control" min="0" @bind="Welfare.ProgramCount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">How many people participated in the welfare activity</label>
+                        <input type="number" class="form-control" min="0" @bind="Welfare.ParticipantCount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">What welfare activities were carried out? (include date)</label>
+                        <textarea class="form-control" rows="4" @bind="Welfare.ActivitiesWithDates"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Give a brief report of the welfare activity carried out, with the beneficiaries</label>
+                        <textarea class="form-control" rows="4" @bind="Welfare.BriefReportWithBeneficiaries"></textarea>
+                    </div>
+                }
+                else if (_department == DepartmentType.Sport)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">What games/sports did members participate in this month</label>
+                        <textarea class="form-control" rows="4" @bind="Sport.GamesParticipated"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">How many members participated in each game or sport</label>
+                        <input type="number" class="form-control" min="0" @bind="Sport.MemberParticipantCount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">How many non-members participated in each game or sport</label>
+                        <input type="number" class="form-control" min="0" @bind="Sport.NonMemberParticipantCount" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Total member count (for % calculation)</label>
+                        <input type="number" class="form-control" min="0" @bind="Sport.TotalMemberCount" />
+                    </div>
+                }
+                else if (_department == DepartmentType.Finance)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">How much was generated from AMSA dues this month</label>
+                        <input type="number" class="form-control" min="0" step="0.01" @bind="Finance.DuesCollected" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Why did others not pay</label>
+                        <textarea class="form-control" rows="4" @bind="Finance.NonPaymentReasons"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Expected dues amount</label>
+                        <input type="number" class="form-control" min="0" step="0.01" @bind="Finance.ExpectedDues" />
+                    </div>
+                }
+                else if (_department == DepartmentType.Health)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Which health activity was held this month? (include date)</label>
+                        <textarea class="form-control" rows="4" @bind="Health.HealthActivityWithDate"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">How many people benefitted</label>
+                        <input type="number" class="form-control" min="0" @bind="Health.BeneficiaryCount" />
+                    </div>
+                }
+                else if (_department == DepartmentType.SecondarySchool)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Did you attend the last Jama'at and circuit meeting?</label>
+                        <select class="form-select" @bind="SecondarySchool.AttendedLastJamaatAndCircuitMeeting">
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">If yes, was any effort made towards ensuring the support of parents? How?</label>
+                        <textarea class="form-control" rows="4" @bind="SecondarySchool.ParentSupportEfforts"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">What AMSA activities did jambites and secondary school students participate in this month?</label>
+                        <textarea class="form-control" rows="4" @bind="SecondarySchool.StudentActivities"></textarea>
+                    </div>
+                }
+                else if (_department == DepartmentType.Tajneed)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Do you have an accurate and updated Tajneed of all AMSA members in your unit?</label>
+                        <select class="form-select" @bind="Tajneed.HasAccurateUpdatedTajneed">
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">What efforts did you put in to improve?</label>
+                        <textarea class="form-control" rows="4" @bind="Tajneed.ImprovementEfforts"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">What are your plans on having accurate Tajneed?</label>
+                        <textarea class="form-control" rows="4" @bind="Tajneed.AccuracyPlans"></textarea>
+                    </div>
+                }
+                else if (_department == DepartmentType.General)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Was there any challenge(s) faced while carrying out activities? If yes, what were they and how do you plan to solve them?</label>
+                        <textarea class="form-control" rows="4" @bind="General.ChallengesAndResolutionPlan"></textarea>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Give a brief and concise report of any other activities carried out this month (include date)</label>
+                        <textarea class="form-control" rows="4" @bind="General.OtherActivitiesWithDates"></textarea>
+                    </div>
+                }
             </div>
-            <div class="card-footer d-flex gap-2">
-                <button class="btn btn-primary" @onclick="SaveDraftAsync" disabled="@IsSaving">Save Draft</button>
-                <button class="btn btn-success" @onclick="SubmitDepartmentAsync" disabled="@IsSaving">Submit Department</button>
-                <button class="btn btn-dark" @onclick="SubmitFullReportAsync" disabled="@IsSaving">Submit Full Report</button>
+            <div class="card-footer d-flex flex-wrap gap-2">
+                <button class="btn btn-primary" @onclick="SaveDraftAsync" disabled="@DisableActions">Save Draft</button>
+                <button class="btn btn-success" @onclick="SubmitDepartmentAsync" disabled="@DisableActions">Submit Department</button>
+                <button class="btn btn-dark" @onclick="SubmitFullReportAsync" disabled="@DisableActions">Submit Full Report</button>
             </div>
         </div>
     }
@@ -50,9 +228,25 @@
     private int _reportId;
     private DepartmentType _department;
     private string DepartmentName = "";
-    private string ReportJson = "{}";
+    private string CycleLabel = "Active Cycle";
+    private string DeadlineLabel = "-";
+    private bool IsCycleLocked;
+    private bool DepartmentSubmitted;
     private string? Message;
     private string MessageClass = "alert-info";
+
+    private TaleemForm Taleem { get; set; } = new();
+    private TablighForm Tabligh { get; set; } = new();
+    private WelfareForm Welfare { get; set; } = new();
+    private SportForm Sport { get; set; } = new();
+    private FinanceForm Finance { get; set; } = new();
+    private HealthForm Health { get; set; } = new();
+    private SecondarySchoolForm SecondarySchool { get; set; } = new();
+    private TajneedForm Tajneed { get; set; } = new();
+    private GeneralForm General { get; set; } = new();
+
+    private bool DisableActions => IsSaving || IsCycleLocked;
+    private bool HasOnCampusActivityPreview => Tabligh.ActivitiesDetails?.Contains("campus", StringComparison.OrdinalIgnoreCase) == true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -62,7 +256,7 @@
             return;
         }
 
-        DepartmentName = _department.ToString();
+        DepartmentName = GetDepartmentTitle(_department);
 
         try
         {
@@ -72,11 +266,17 @@
                 return;
             }
 
-            var report = await CurrentUserReportService.GetOrCreateCurrentUserDraftAsync();
+            var cycle = await CurrentUserReportService.GetActiveCycleAsync();
+            CycleLabel = cycle.CycleMonth;
+            DeadlineLabel = cycle.SubmissionDeadline.ToString("MMMM d, yyyy");
+            IsCycleLocked = cycle.IsLocked || DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
+
+            var report = await CurrentUserReportService.GetOrCreateCurrentUserDraftAsync(cycle.Id);
             _reportId = report.Id;
 
             var departmentReport = await CurrentUserReportService.GetDepartmentAsync(_reportId, _department);
-            ReportJson = string.IsNullOrWhiteSpace(departmentReport?.ReportData) ? "{}" : departmentReport!.ReportData!;
+            DepartmentSubmitted = departmentReport?.IsSubmitted == true;
+            LoadDepartmentForm(departmentReport?.ReportData);
         }
         catch (Exception ex)
         {
@@ -106,11 +306,17 @@
             return;
         }
 
+        if (IsCycleLocked)
+        {
+            SetMessage("This cycle is locked and can no longer be submitted.", false);
+            return;
+        }
+
         IsSaving = true;
         try
         {
-            await CurrentUserReportService.SubmitReportToPresidentAsync(_reportId, "Submitted from editor");
-            SetMessage("Report submitted to president.", true);
+            await CurrentUserReportService.SubmitReportToPresidentAsync(_reportId, "Submitted from department editor");
+            SetMessage("Report submitted to unit leadership.", true);
         }
         catch (Exception ex)
         {
@@ -130,11 +336,26 @@
             return;
         }
 
+        if (IsCycleLocked)
+        {
+            SetMessage("This cycle is locked and can no longer be edited.", false);
+            return;
+        }
+
+        var validationError = ValidateCurrentForm();
+        if (!string.IsNullOrWhiteSpace(validationError))
+        {
+            SetMessage(validationError, false);
+            return;
+        }
+
         IsSaving = true;
         try
         {
-            await CurrentUserReportService.SaveDepartmentJsonAsync(_reportId, _department, ReportJson, markSubmitted);
-            SetMessage(markSubmitted ? "Department submitted." : "Draft saved.", true);
+            var payload = DepartmentReportFormMapper.Serialize(_department, GetCurrentFormObject());
+            await CurrentUserReportService.SaveDepartmentJsonAsync(_reportId, _department, payload, markSubmitted);
+            DepartmentSubmitted = DepartmentSubmitted || markSubmitted;
+            SetMessage(markSubmitted ? "Department submitted successfully." : "Draft saved successfully.", true);
         }
         catch (Exception ex)
         {
@@ -144,6 +365,75 @@
         {
             IsSaving = false;
         }
+    }
+
+    private object GetCurrentFormObject() => _department switch
+    {
+        DepartmentType.Taleem => Taleem,
+        DepartmentType.Tabligh => Tabligh,
+        DepartmentType.Welfare => Welfare,
+        DepartmentType.Sport => Sport,
+        DepartmentType.Finance => Finance,
+        DepartmentType.Health => Health,
+        DepartmentType.SecondarySchool => SecondarySchool,
+        DepartmentType.Tajneed => Tajneed,
+        DepartmentType.General => General,
+        _ => General
+    };
+
+    private void LoadDepartmentForm(string? reportData)
+    {
+        var form = DepartmentReportFormMapper.Deserialize(_department, reportData);
+        switch (_department)
+        {
+            case DepartmentType.Taleem:
+                Taleem = (TaleemForm)form;
+                break;
+            case DepartmentType.Tabligh:
+                Tabligh = (TablighForm)form;
+                break;
+            case DepartmentType.Welfare:
+                Welfare = (WelfareForm)form;
+                break;
+            case DepartmentType.Sport:
+                Sport = (SportForm)form;
+                break;
+            case DepartmentType.Finance:
+                Finance = (FinanceForm)form;
+                break;
+            case DepartmentType.Health:
+                Health = (HealthForm)form;
+                break;
+            case DepartmentType.SecondarySchool:
+                SecondarySchool = (SecondarySchoolForm)form;
+                break;
+            case DepartmentType.Tajneed:
+                Tajneed = (TajneedForm)form;
+                break;
+            case DepartmentType.General:
+                General = (GeneralForm)form;
+                break;
+        }
+    }
+
+    private string? ValidateCurrentForm()
+    {
+        return _department switch
+        {
+            DepartmentType.Taleem when Taleem.AttendanceCount < 0 || Taleem.TotalMemberCount < 0 || Taleem.SessionDurationMinutes < 0 || Taleem.MonthlyTestParticipants < 0 || Taleem.SessionsOrganized < 0
+                => "Taleem numeric fields cannot be negative.",
+            DepartmentType.Tabligh when Tabligh.AttendeeCount < 0
+                => "Attendee count cannot be negative.",
+            DepartmentType.Welfare when Welfare.ProgramCount < 0 || Welfare.ParticipantCount < 0
+                => "Welfare numeric fields cannot be negative.",
+            DepartmentType.Sport when Sport.MemberParticipantCount < 0 || Sport.NonMemberParticipantCount < 0 || Sport.TotalMemberCount < 0
+                => "Sport numeric fields cannot be negative.",
+            DepartmentType.Finance when Finance.DuesCollected < 0 || Finance.ExpectedDues < 0
+                => "Finance amounts cannot be negative.",
+            DepartmentType.Health when Health.BeneficiaryCount < 0
+                => "Beneficiary count cannot be negative.",
+            _ => null
+        };
     }
 
     private void SetMessage(string message, bool success)
@@ -157,6 +447,20 @@
         var normalized = slug?.Trim() ?? string.Empty;
         return Enum.TryParse(normalized, ignoreCase: true, out department);
     }
+
+    private static string GetDepartmentTitle(DepartmentType department) => department switch
+    {
+        DepartmentType.Taleem => "Taleem",
+        DepartmentType.Tabligh => "Tabligh",
+        DepartmentType.Welfare => "Welfare",
+        DepartmentType.Sport => "Sport",
+        DepartmentType.Finance => "Finance",
+        DepartmentType.Health => "Health",
+        DepartmentType.SecondarySchool => "Secondary School",
+        DepartmentType.Tajneed => "Tajneed",
+        DepartmentType.General => "General",
+        _ => department.ToString()
+    };
 
     private void BackToDashboard()
     {

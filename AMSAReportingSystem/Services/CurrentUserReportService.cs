@@ -74,6 +74,18 @@ public class CurrentUserReportService
         return await _reportService.GetStateReportsAsync(actor, actor.StateId, cycleId, ct);
     }
 
+    public async Task<StateReport> GetOrCreateMyStateReportAsync(int cycleId, CancellationToken ct = default)
+    {
+        var actor = GetCurrentUserOrThrow();
+        return await _reportService.GetOrCreateStateReportAsync(actor, actor.StateId, cycleId, ct);
+    }
+
+    public async Task<StateReport> SaveMyStateReportAsync(int stateReportId, StateReportForm form, bool markSubmitted, CancellationToken ct = default)
+    {
+        var actor = GetCurrentUserOrThrow();
+        return await _reportService.SaveStateReportAsync(actor, stateReportId, form, markSubmitted, ct);
+    }
+
     public async Task<List<Report>> GetNationalReportsAsync(int? cycleId = null, CancellationToken ct = default)
     {
         var actor = GetCurrentUserOrThrow();

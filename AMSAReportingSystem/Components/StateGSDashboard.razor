@@ -11,13 +11,116 @@
     {
         <div class="alert alert-info">
             <h5 class="alert-heading mb-1">State Reports - @CycleLabel</h5>
-            <p class="mb-0">Review reports forwarded from unit leadership and decide what goes to national.</p>
+            <p class="mb-0">Review reports forwarded from unit leadership and prepare your state report for national.</p>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Message))
         {
             <div class="alert @MessageClass">@Message</div>
         }
+
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">State-Level Monthly Report</h5>
+                <span class="badge @(StateReportSubmitted ? "bg-success" : "bg-warning text-dark")">
+                    @(StateReportSubmitted ? "Submitted To National" : "Draft")
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Attendance of Unit Presidents in State meeting</label>
+                        <div class="input-group">
+                            <input type="number" min="0" class="form-control" @bind="StateForm.UnitPresidentsAttended" />
+                            <span class="input-group-text">out of</span>
+                            <input type="number" min="0" class="form-control" @bind="StateForm.TotalUnitPresidents" />
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">How would you rate the performance of the units under you? (0-100)</label>
+                        <input type="number" min="0" max="100" class="form-control" @bind="StateForm.UnitPerformanceRating" />
+                    </div>
+
+                    <div class="col-12">
+                        <label class="form-label">How would you help them perform better?</label>
+                        <textarea class="form-control" rows="3" @bind="StateForm.UnitImprovementPlan"></textarea>
+                    </div>
+                </div>
+
+                <hr />
+
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">State Programs / Activities</h6>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="AddProgram" disabled="@DisableStateFormActions">Add Program</button>
+                </div>
+
+                @if (StateForm.Programs.Count == 0)
+                {
+                    <div class="text-muted small mb-2">No programs added yet.</div>
+                }
+                else
+                {
+                    @for (var i = 0; i < StateForm.Programs.Count; i++)
+                    {
+                        var index = i;
+                        <div class="border rounded p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong>Program @(i + 1)</strong>
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveProgram(index)" disabled="@DisableStateFormActions">Remove</button>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Program Name</label>
+                                    <input class="form-control" @bind="StateForm.Programs[i].ProgramName" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Objectives</label>
+                                    <input class="form-control" @bind="StateForm.Programs[i].Objectives" />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Outcomes</label>
+                                    <input class="form-control" @bind="StateForm.Programs[i].Outcomes" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Total Attendance</label>
+                                    <input type="number" min="0" class="form-control" @bind="StateForm.Programs[i].TotalAttendance" />
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Total Beneficiaries</label>
+                                    <input type="number" min="0" class="form-control" @bind="StateForm.Programs[i].TotalBeneficiaries" />
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+
+                <div class="mb-3">
+                    <label class="form-label">Was there any challenge(s) faced? What were they and how do you plan to solve them?</label>
+                    <textarea class="form-control" rows="3" @bind="StateForm.ChallengesFaced"></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">How do you need the National to come in?</label>
+                    <textarea class="form-control" rows="3" @bind="StateForm.NationalSupportNeeded"></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Give a brief and concise report of any other specific things worthy of note</label>
+                    <textarea class="form-control" rows="3" @bind="StateForm.OtherNotes"></textarea>
+                </div>
+
+                @if (IsCycleLocked)
+                {
+                    <div class="alert alert-warning mb-3">
+                        This cycle is locked. Deadline was @DeadlineLabel.
+                    </div>
+                }
+            </div>
+            <div class="card-footer d-flex gap-2">
+                <button class="btn btn-primary" @onclick="SaveStateDraftAsync" disabled="@DisableStateFormActions">Save Draft</button>
+                <button class="btn btn-success" @onclick="SubmitStateReportAsync" disabled="@DisableStateFormActions">Submit State Report</button>
+            </div>
+        </div>
 
         <div class="row mb-3">
             <div class="col-md-3"><strong>Total:</strong> @Reports.Count</div>
@@ -90,11 +193,18 @@
     public AuthContext? CurrentUser { get; set; }
 
     private bool IsLoading = true;
+    private bool IsSavingStateForm;
+    private bool IsCycleLocked;
+    private bool StateReportSubmitted;
     private string CycleLabel = "Active Cycle";
+    private string DeadlineLabel = "-";
     private string? Message;
     private string MessageClass = "alert-info";
     private List<Report> Reports = new();
     private Dictionary<int, string> NotesByReport = new();
+    private StateReportForm StateForm = new();
+    private int StateReportId;
+    private bool DisableStateFormActions => IsSavingStateForm || IsCycleLocked || StateReportSubmitted;
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,8 +218,20 @@
         {
             var cycle = await CurrentUserReportService.GetActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
+            DeadlineLabel = cycle.SubmissionDeadline.ToString("MMMM d, yyyy");
+            IsCycleLocked = cycle.IsLocked || DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
+
             Reports = await CurrentUserReportService.GetMyStateReportsAsync(cycle.Id);
             NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
+
+            var stateReport = await CurrentUserReportService.GetOrCreateMyStateReportAsync(cycle.Id);
+            StateReportId = stateReport.Id;
+            StateReportSubmitted = stateReport.Status is ReportStatus.SubmittedToNational or ReportStatus.Acknowledged;
+            StateForm = StateReportFormMapper.ToForm(stateReport);
+            if (StateForm.Programs.Count == 0)
+            {
+                StateForm.Programs.Add(new StateProgramForm());
+            }
         }
         catch (Exception ex)
         {
@@ -118,6 +240,66 @@
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task SaveStateDraftAsync()
+    {
+        await SaveStateAsync(markSubmitted: false);
+    }
+
+    private async Task SubmitStateReportAsync()
+    {
+        await SaveStateAsync(markSubmitted: true);
+    }
+
+    private async Task SaveStateAsync(bool markSubmitted)
+    {
+        if (DisableStateFormActions || StateReportId <= 0)
+        {
+            return;
+        }
+
+        IsSavingStateForm = true;
+        try
+        {
+            StateForm.StateReportId = StateReportId;
+            var saved = await CurrentUserReportService.SaveMyStateReportAsync(StateReportId, StateForm, markSubmitted);
+            StateForm = StateReportFormMapper.ToForm(saved);
+            if (StateForm.Programs.Count == 0)
+            {
+                StateForm.Programs.Add(new StateProgramForm());
+            }
+
+            StateReportSubmitted = saved.Status is ReportStatus.SubmittedToNational or ReportStatus.Acknowledged;
+            SetMessage(markSubmitted ? "State report submitted to national." : "State report draft saved.", true);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+        finally
+        {
+            IsSavingStateForm = false;
+        }
+    }
+
+    private void AddProgram()
+    {
+        StateForm.Programs.Add(new StateProgramForm());
+    }
+
+    private void RemoveProgram(int index)
+    {
+        if (index < 0 || index >= StateForm.Programs.Count)
+        {
+            return;
+        }
+
+        StateForm.Programs.RemoveAt(index);
+        if (StateForm.Programs.Count == 0)
+        {
+            StateForm.Programs.Add(new StateProgramForm());
         }
     }
 

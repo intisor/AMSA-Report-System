@@ -84,7 +84,7 @@ public class Reminder
     public int Id { get; set; }
     public int CycleId { get; set; }
     public string ReminderType { get; set; } = string.Empty; // "SubmissionDeadlineApproaching", "DeadlineReached", etc.
-    public string? TargetRole { get; set; } // "Officer", "President", "StateGS", "NationalLeadership", null = all
+    public string? TargetRole { get; set; } // Use "Department:LevelType" (e.g. "Taleem:Unit"), null = all
     public string? TargetState { get; set; } // null = national, or specific state code
     public string Message { get; set; } = string.Empty;
     public DateTime ScheduledFor { get; set; }

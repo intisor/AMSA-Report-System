@@ -62,7 +62,7 @@
                                     <div class="section-info">
                                         <h6>@GetDepartmentTitle(dept)</h6>
                                         <p class="mb-2 text-muted">@GetDepartmentHint(dept)</p>
-                                        <small class="status-badge draft">Draft</small>
+                                        <small class="status-badge @GetDepartmentStatusBadgeClass(dept)">@GetDepartmentStatusLabel(dept)</small>
                                     </div>
                                     <button class="btn btn-primary btn-sm" @onclick="() => EditDepartment(dept)">
                                         Edit Form →
@@ -93,15 +93,21 @@
                     <h6 class="mb-0">Recent Notifications</h6>
                 </div>
                 <div class="card-body" style="max-height: 300px; overflow-y: auto;">
-                    <div class="notification-item">
-                        <small class="text-muted d-block mb-1">Today at 9:30 AM</small>
-                        <p class="mb-2"><strong>Reminder:</strong> January reporting cycle is open</p>
-                    </div>
-                    <hr class="my-2" />
-                    <div class="notification-item">
-                        <small class="text-muted d-block mb-1">Yesterday at 3:15 PM</small>
-                        <p class="mb-2"><strong>Ready:</strong> Submit your department report</p>
-                    </div>
+                    @if (RecentActivity.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No recent activity yet for this cycle.</p>
+                    }
+                    else
+                    {
+                        @foreach (var item in RecentActivity)
+                        {
+                            <div class="notification-item">
+                                <small class="text-muted d-block mb-1">@item.At.ToString("MMM d, yyyy h:mm tt")</small>
+                                <p class="mb-2">@item.Message</p>
+                            </div>
+                            <hr class="my-2" />
+                        }
+                    }
                 </div>
             </div>
         </div>
@@ -189,6 +195,8 @@
     private int? DaysLeft { get; set; }
     private int TotalDepartments { get; set; } = 9;
     private int SubmittedDepartments { get; set; }
+    private Report? CurrentReport { get; set; }
+    private List<ActivityItem> RecentActivity { get; set; } = new();
     private int ProgressPercent => TotalDepartments == 0 ? 0 : (int)Math.Round((SubmittedDepartments * 100.0) / TotalDepartments);
 
     protected override async Task OnParametersSetAsync()
@@ -211,9 +219,14 @@
             DeadlineLabel = cycle.SubmissionDeadline.ToString("MMMM d, yyyy");
             DaysLeft = (cycle.SubmissionDeadline.Date - DateTime.UtcNow.Date).Days;
 
-            var report = await CurrentUserReportService.GetOrCreateCurrentUserDraftAsync(cycle.Id);
-            TotalDepartments = report.DepartmentReports.Count == 0 ? 9 : report.DepartmentReports.Count;
-            SubmittedDepartments = report.DepartmentReports.Count(d => d.IsSubmitted);
+            CurrentReport = await CurrentUserReportService.GetOrCreateCurrentUserDraftAsync(cycle.Id);
+            TotalDepartments = CurrentReport.DepartmentReports.Count == 0 ? 9 : CurrentReport.DepartmentReports.Count;
+            SubmittedDepartments = CurrentReport.DepartmentReports.Count(d => d.IsSubmitted);
+            RecentActivity = CurrentReport.ActivityLogs
+                .OrderByDescending(log => log.ActionAt)
+                .Take(6)
+                .Select(log => new ActivityItem(log.ActionAt, ToReadableActivity(log.Action)))
+                .ToList();
         }
         catch
         {
@@ -287,5 +300,48 @@
         DepartmentType.General => "bi-grid",
         _ => "bi-journal-text"
     };
+
+    private string GetDepartmentStatusLabel(DepartmentType department)
+    {
+        var row = CurrentReport?.DepartmentReports.FirstOrDefault(d => d.Department == department);
+        if (row is null)
+        {
+            return "Draft";
+        }
+
+        return row.IsSubmitted ? "Submitted" : "Draft";
     }
+
+    private string GetDepartmentStatusBadgeClass(DepartmentType department)
+    {
+        var row = CurrentReport?.DepartmentReports.FirstOrDefault(d => d.Department == department);
+        if (row?.IsSubmitted == true)
+        {
+            return "submitted";
+        }
+
+        return "draft";
+    }
+
+    private static string ToReadableActivity(string action)
+    {
+        if (action.StartsWith("DepartmentSaved:", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Saved {action["DepartmentSaved:".Length..]} report draft.";
+        }
+
+        if (action.StartsWith("DepartmentSubmitted:", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Submitted {action["DepartmentSubmitted:".Length..]} report section.";
+        }
+
+        return action switch
+        {
+            "ReportCreated" => "Your cycle report was created.",
+            "ReportSubmittedToPresident" => "Full report submitted to unit leadership.",
+            _ => action
+        };
+    }
+
+    private sealed record ActivityItem(DateTime At, string Message);
 }

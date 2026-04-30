@@ -83,7 +83,7 @@ public class TokenResponse
 {
     public string Token { get; set; } = string.Empty;
     public string TokenType { get; set; } = "Bearer";
-    public int? ExpiresIn { get; set; }
+    //public int? ExpiresIn { get; set; }
 }
 
 /// <summary>
@@ -96,16 +96,16 @@ public class MemberResponse
     public required string LastName { get; set; }
     public required string Email { get; set; }
     public string? Phone { get; set; }
-    public required string MkanId { get; set; }
+    public required int MkanId { get; set; }
     
     /// <summary>
     /// Organizational hierarchy
     /// </summary>
-    public required OrganizationHierarchyDto Hierarchy { get; set; }
+    public required OrganizationHierarchyDto Unit { get; set; }
 
     /// <summary>
     /// Roles assigned to member at various levels
-    /// Format: "DepartmentName:LevelType" e.g., "Taleem:DepartmentOfficer"
+    /// Format: "DepartmentName:LevelType" e.g., "Taleem:Unit", "General:State", "President:National"
     /// </summary>
     public required List<RoleDto> Roles { get; set; }
 }
@@ -117,10 +117,21 @@ public class OrganizationHierarchyDto
 {
     public int UnitId { get; set; }
     public required string UnitName { get; set; }
+    public required StateDto State { get; set; }
+}
+public class StateDto
+{
     public int StateId { get; set; }
     public required string StateName { get; set; }
-    public required string Country { get; set; } = "Nigeria"; // Always Nigeria
+    public required NationalDto National { get; set; }
 }
+public class NationalDto
+{
+    public int NationalId { get; set; }
+    public required string NationalName { get; set; }
+}
+
+
 
 /// <summary>
 /// Role information with department and level
@@ -128,7 +139,7 @@ public class OrganizationHierarchyDto
 public class RoleDto
 {
     public required string DepartmentName { get; set; }
-    public required string LevelType { get; set; } // e.g., "DepartmentOfficer", "UnitPresident", "StateGS"
+    public required string LevelType { get; set; } // Expected values: "Unit", "State", "National"
 }
 
 /// <summary>
@@ -169,7 +180,7 @@ public class MemberSummaryDto
     public int MemberId { get; set; }
     public required string FirstName { get; set; }
     public required string LastName { get; set; }
-    public required string MkanId { get; set; }
+    public required int MkanId { get; set; }
     public required string Email { get; set; }
     
     /// <summary>
