@@ -13,7 +13,7 @@ namespace AMSAReportingSystem.Services;
 /// Configuration options for AMSA API client integration
 /// Binds from appsettings.json "AMSAApi" section
 /// </summary>
-public class AMSAApiClientOptions
+public class AmsaApiClientOptions
 {
     public const string SectionName = "AMSAApi";
 
@@ -112,14 +112,14 @@ public class AMSAApiConnectionStatus
 public class AMSAApiStartupHealthCheckService : IHostedService
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly AMSAApiClientOptions _options;
+    private readonly AmsaApiClientOptions _options;
     private readonly AMSAApiConnectionStatus _connectionStatus;
     private readonly ILogger<AMSAApiStartupHealthCheckService> _logger;
 
     public AMSAApiStartupHealthCheckService(
         IHttpClientFactory httpClientFactory,
         AMSAApiConnectionStatus connectionStatus,
-        IOptions<AMSAApiClientOptions> options,
+        IOptions<AmsaApiClientOptions> options,
         ILogger<AMSAApiStartupHealthCheckService> logger)
     {
         _httpClientFactory = httpClientFactory;

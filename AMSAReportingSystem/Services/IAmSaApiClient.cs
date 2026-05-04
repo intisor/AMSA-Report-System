@@ -6,7 +6,7 @@ namespace AMSAReportingSystem.Services;
 /// Client interface for AMSA API integration
 /// Provides methods to call all 9 AMSA API endpoints
 /// </summary>
-public interface IAmSaApiClient
+public interface IAmsaApiClient
 {
     /// <summary>
     /// Generate JWT token for member via app-to-app authentication

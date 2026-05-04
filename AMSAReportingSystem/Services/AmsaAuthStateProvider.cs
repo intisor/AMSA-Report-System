@@ -12,12 +12,12 @@ namespace AMSAReportingSystem.Services;
 public class AMSAAuthStateProvider : AuthenticationStateProvider
 {
     private const string AuthStorageKey = "amsa.auth.context";
-    private readonly AMSAAuthService _authService;
+    private readonly AmsaAuthService _authService;
     private readonly IJSRuntime _jsRuntime;
     private readonly ILogger<AMSAAuthStateProvider> _logger;
     private AuthContext? _currentUser;
 
-    public AMSAAuthStateProvider(AMSAAuthService authService, IJSRuntime jsRuntime, ILogger<AMSAAuthStateProvider> logger)
+    public AMSAAuthStateProvider(AmsaAuthService authService, IJSRuntime jsRuntime, ILogger<AMSAAuthStateProvider> logger)
     {
         _authService = authService;
         _jsRuntime = jsRuntime;

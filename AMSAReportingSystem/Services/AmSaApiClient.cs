@@ -9,18 +9,18 @@ namespace AMSAReportingSystem.Services;
 /// Implementation of AMSA API client using HttpClient
 /// Handles all 9 endpoint calls with error handling and logging
 /// </summary>
-public class AMSAApiClient : IAmSaApiClient
+public class AmsaApiClient : IAmsaApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly AMSAApiClientOptions _options;
-    private readonly ILogger<AMSAApiClient> _logger;
+    private readonly AmsaApiClientOptions _options;
+    private readonly ILogger<AmsaApiClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AMSAApiClient(HttpClient httpClient, IOptions<AMSAApiClientOptions> options, ILogger<AMSAApiClient> logger)
+    public AmsaApiClient(HttpClient httpClient, IOptions<AmsaApiClientOptions> options, ILogger<AmsaApiClient> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;

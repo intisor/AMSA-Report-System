@@ -15,13 +15,13 @@ public class UnifiedReportService
     private const int DefaultSubmissionGraceDays = 7;
 
     private readonly AMSAReportingDbContext _db;
-    private readonly IAmSaApiClient _amSaApiClient;
+    private readonly IAmsaApiClient _amSaApiClient;
     private readonly ReportAccessService _access;
     private readonly ILogger<UnifiedReportService> _logger;
 
     public UnifiedReportService(
         AMSAReportingDbContext db,
-        IAmSaApiClient amSaApiClient,
+        IAmsaApiClient amSaApiClient,
         ReportAccessService access,
         ILogger<UnifiedReportService> logger)
     {

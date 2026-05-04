@@ -19,20 +19,20 @@ builder.Services.AddDbContext<AMSAReportingDbContext>(options =>
 		?? "Server=(localdb)\\mssqllocaldb;Database=AMSAReportingDb;Trusted_Connection=true;"));
 
 // Configure AMSA API client options
-builder.Services.Configure<AMSAApiClientOptions>(
-	builder.Configuration.GetSection(AMSAApiClientOptions.SectionName));
+builder.Services.Configure<AmsaApiClientOptions>(
+	builder.Configuration.GetSection(AmsaApiClientOptions.SectionName));
 
 // Add typed HttpClient for AMSA API
-builder.Services.AddHttpClient<IAmSaApiClient, AMSAApiClient>((serviceProvider, client) =>
+builder.Services.AddHttpClient<IAmsaApiClient, AmsaApiClient>((serviceProvider, client) =>
 	{
-		var options = serviceProvider.GetRequiredService<IOptions<AMSAApiClientOptions>>();
+		var options = serviceProvider.GetRequiredService<IOptions<AmsaApiClientOptions>>();
 		client.BaseAddress = new Uri(options.Value.BaseUrl);
 		client.Timeout = TimeSpan.FromSeconds(options.Value.RequestTimeoutSeconds);
 	});
 
 // Add authentication services
 // Authentication services
-builder.Services.AddScoped<AMSAAuthService>();
+builder.Services.AddScoped<AmsaAuthService>();
 builder.Services.AddScoped<AMSAAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<AMSAAuthStateProvider>());
 builder.Services.AddSingleton<AMSAApiConnectionStatus>();

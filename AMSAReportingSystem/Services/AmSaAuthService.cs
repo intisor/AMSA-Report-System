@@ -7,14 +7,14 @@ namespace AMSAReportingSystem.Services;
 /// Authentication service that integrates with AMSA API
 /// Replaces MockAuthService with real app-to-app authentication
 /// </summary>
-public class AMSAAuthService
+public class AmsaAuthService
 {
-    private readonly IAmSaApiClient _apiClient;
-    private readonly ILogger<AMSAAuthService> _logger;
+    private readonly IAmsaApiClient _apiClient;
+    private readonly ILogger<AmsaAuthService> _logger;
     private string? _cachedToken;
     private DateTime _tokenExpiry;
 
-    public AMSAAuthService(IAmSaApiClient apiClient, ILogger<AMSAAuthService> logger)
+    public AmsaAuthService(IAmsaApiClient apiClient, ILogger<AmsaAuthService> logger)
     {
         _apiClient = apiClient;
         _logger = logger;
