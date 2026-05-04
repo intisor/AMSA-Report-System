@@ -213,7 +213,10 @@
             <div class="card-footer d-flex flex-wrap gap-2">
                 <button class="btn btn-primary" @onclick="SaveDraftAsync" disabled="@DisableActions">Save Draft</button>
                 <button class="btn btn-success" @onclick="SubmitDepartmentAsync" disabled="@DisableActions">Submit Department</button>
-                <button class="btn btn-dark" @onclick="SubmitFullReportAsync" disabled="@DisableActions">Submit Full Report</button>
+                @if (CanSubmitFullReport)
+                {
+                    <button class="btn btn-dark" @onclick="SubmitFullReportAsync" disabled="@DisableActions">Submit Full Report</button>
+                }
             </div>
         </div>
     }
@@ -232,6 +235,7 @@
     private string DeadlineLabel = "-";
     private bool IsCycleLocked;
     private bool DepartmentSubmitted;
+    private bool CanSubmitFullReport;
     private string? Message;
     private string MessageClass = "alert-info";
 
@@ -266,12 +270,14 @@
                 return;
             }
 
-            var cycle = await CurrentUserReportService.GetActiveCycleAsync();
+            CanSubmitFullReport = CurrentUserReportService.CanInitiateCurrentUserReportSubmission();
+
+            var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
             DeadlineLabel = cycle.SubmissionDeadline.ToString("MMMM d, yyyy");
             IsCycleLocked = cycle.IsLocked || DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
 
-            var report = await CurrentUserReportService.GetOrCreateCurrentUserDraftAsync(cycle.Id);
+            var report = await CurrentUserReportService.EnsureCurrentUserDraftAsync(cycle.Id);
             _reportId = report.Id;
 
             var departmentReport = await CurrentUserReportService.GetDepartmentAsync(_reportId, _department);
@@ -445,7 +451,12 @@
     private static bool TryMapDepartment(string slug, out DepartmentType department)
     {
         var normalized = slug?.Trim() ?? string.Empty;
-        return Enum.TryParse(normalized, ignoreCase: true, out department);
+        if (!Enum.TryParse(normalized, ignoreCase: true, out department))
+        {
+            return false;
+        }
+
+        return ReportDepartmentCatalog.ReportableDepartments.Contains(department);
     }
 
     private static string GetDepartmentTitle(DepartmentType department) => department switch

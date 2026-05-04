@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AMSAReportingSystem.Migrations
 {
-    [DbContext(typeof(AmsaReportingDbContext))]
+    [DbContext(typeof(AMSAReportingDbContext))]
     [Migration("20260423163152_ConsolidateDepartmentReports")]
     partial class ConsolidateDepartmentReports
     {

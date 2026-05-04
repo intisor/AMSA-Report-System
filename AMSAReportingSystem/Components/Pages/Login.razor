@@ -140,7 +140,7 @@
                 return;
             }
 
-            var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+            var amsaProvider = (AMSAAuthStateProvider)AuthStateProvider;
             await amsaProvider.LoginAsync(MkanId.Trim());
             Nav.NavigateTo("/dashboard", forceLoad: false);
         }

@@ -3,9 +3,9 @@ using AMSAReportingSystem.Data.Entities;
 
 namespace AMSAReportingSystem.Data;
 
-public class AmsaReportingDbContext : DbContext
+public class AMSAReportingDbContext : DbContext
 {
-    public AmsaReportingDbContext(DbContextOptions<AmsaReportingDbContext> options) 
+    public AMSAReportingDbContext(DbContextOptions<AMSAReportingDbContext> options)
         : base(options)
     {
     }

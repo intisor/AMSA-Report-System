@@ -10,8 +10,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AMSAReportingSystem.Migrations
 {
-    [DbContext(typeof(AmsaReportingDbContext))]
-    partial class AmsaReportingDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(AMSAReportingDbContext))]
+    partial class AMSAReportingDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {

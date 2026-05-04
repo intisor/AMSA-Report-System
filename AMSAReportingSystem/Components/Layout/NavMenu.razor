@@ -46,14 +46,14 @@
 
     protected override void OnInitialized()
     {
-        var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+        var amsaProvider = (AMSAAuthStateProvider)AuthStateProvider;
         CurrentUser = amsaProvider.GetCurrentUser();
         MyReportLink = ResolveMyReportLink(CurrentUser);
     }
 
     private async Task LogoutAsync(MouseEventArgs e)
     {
-        var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+        var amsaProvider = (AMSAAuthStateProvider)AuthStateProvider;
         await amsaProvider.LogoutAsync();
         Nav.NavigateTo("/login", forceLoad: true);
     }
@@ -78,7 +78,7 @@
             return null;
         }
 
-        foreach (var department in Enum.GetValues<DepartmentType>())
+        foreach (var department in ReportDepartmentCatalog.ReportableDepartments)
         {
             if (ReportAccessService.CanEditDepartment(user, user.UnitId, user.StateId, department))
             {

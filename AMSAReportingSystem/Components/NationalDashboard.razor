@@ -104,7 +104,7 @@
         IsLoading = true;
         try
         {
-            var cycle = await CurrentUserReportService.GetActiveCycleAsync();
+            var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
             Reports = await CurrentUserReportService.GetNationalReportsAsync(cycle.Id);
             NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);

@@ -21,15 +21,27 @@ public enum ReportStatus
 /// </summary>
 public enum DepartmentType
 {
-    Taleem = 0,           // Islamic Education
-    Tabligh = 1,          // Preaching/Missionary Work
-    Welfare = 2,          // Welfare/Social Services
-    Sport = 3,            // Sports & Recreation
-    Finance = 4,          // Finance
-    Health = 5,           // Health
-    SecondarySchool = 6,  // Secondary School Education
-    Tajneed = 7,          // Member Registry/Audit
-    General = 8           // General/Miscellaneous
+    Taleem = 0,           
+    Tabligh = 1,          
+    Welfare = 2,          
+    Sport = 3,            
+    Finance = 4,          
+    Health = 5,           
+    SecondarySchool = 6,  
+    Tajneed = 7,          
+    General = 8,
+    President = 9,
+    VicePresident = 10,
+}
+
+/// <summary>
+/// 3 levels of organizational hierarchy in AMSA
+/// </summary>
+public enum LevelType
+{
+    Unit = 0,
+    State = 1,
+    National = 2
 }
 
 /// <summary>

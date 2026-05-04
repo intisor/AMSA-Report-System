@@ -1,7 +1,15 @@
 using AMSAReportingSystem.Data.Entities;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AMSAReportingSystem.Services;
+
+#region Department Report Forms
+
+/// <summary>
+/// Department report form models for structured data submission
+/// Each department submits data through its corresponding form
+/// </summary>
 
 public sealed class TaleemForm
 {
@@ -72,15 +80,59 @@ public sealed class GeneralForm
     public string? OtherActivitiesWithDates { get; set; }
 }
 
+#endregion
+
+#region State Report Forms
+
+/// <summary>
+/// State-level report forms for aggregated unit performance data
+/// Contains unit-wide metrics and state-specific programs
+/// </summary>
+
+public sealed class StateReportForm
+{
+    public int StateReportId { get; set; }
+    public int UnitPresidentsAttended { get; set; }
+    public int TotalUnitPresidents { get; set; }
+    public int? UnitPerformanceRating { get; set; }
+    public string? UnitImprovementPlan { get; set; }
+    public string? ChallengesFaced { get; set; }
+    public string? NationalSupportNeeded { get; set; }
+    public string? OtherNotes { get; set; }
+    public List<StateProgramForm> Programs { get; set; } = new();
+}
+
+public sealed class StateProgramForm
+{
+    public string ProgramName { get; set; } = string.Empty;
+    public string? Objectives { get; set; }
+    public string? Outcomes { get; set; }
+    public int? TotalAttendance { get; set; }
+    public int? TotalBeneficiaries { get; set; }
+}
+
+#endregion
+
+#region Form Serialization & Deserialization
+
+/// <summary>
+/// Handles serialization/deserialization of department report forms
+/// Manages JSON conversion with camelCase policy and null-value handling
+/// </summary>
 public static class DepartmentReportFormMapper
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        WriteIndented = false
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    /// <summary>
+    /// Deserializes JSON to the appropriate department form type
+    /// Returns an empty instance if deserialization fails
+    /// </summary>
     public static object Deserialize(DepartmentType department, string? json)
     {
         var payload = string.IsNullOrWhiteSpace(json) ? "{}" : json!;
@@ -99,12 +151,19 @@ public static class DepartmentReportFormMapper
         };
     }
 
+    /// <summary>
+    /// Serializes department form to JSON
+    /// Normalizes derived fields before serialization
+    /// </summary>
     public static string Serialize(DepartmentType department, object form)
     {
         NormalizeDerivedFields(department, form);
         return JsonSerializer.Serialize(form, form.GetType(), JsonOptions);
     }
 
+    /// <summary>
+    /// Deserializes JSON string to typed form, returning empty instance on failure
+    /// </summary>
     private static T DeserializeOrDefault<T>(string payload) where T : new()
     {
         try
@@ -117,6 +176,10 @@ public static class DepartmentReportFormMapper
         }
     }
 
+    /// <summary>
+    /// Normalizes derived fields before serialization
+    /// Example: Tabligh form checks for campus keywords in activities
+    /// </summary>
     private static void NormalizeDerivedFields(DepartmentType department, object form)
     {
         if (department != DepartmentType.Tabligh || form is not TablighForm tab)
@@ -133,3 +196,40 @@ public static class DepartmentReportFormMapper
         tab.HasOnCampusActivity = tab.ActivitiesDetails.Contains("campus", StringComparison.OrdinalIgnoreCase);
     }
 }
+
+/// <summary>
+/// Handles mapping between StateReport entity and StateReportForm DTO
+/// </summary>
+public static class StateReportFormMapper
+{
+    /// <summary>
+    /// Maps StateReport entity to StateReportForm DTO for API responses
+    /// </summary>
+    public static StateReportForm ToForm(StateReport report)
+    {
+        return new StateReportForm
+        {
+            StateReportId = report.Id,
+            UnitPresidentsAttended = report.UnitPresidentsAttended,
+            TotalUnitPresidents = report.TotalUnitPresidents,
+            UnitPerformanceRating = report.UnitPerformanceRating,
+            UnitImprovementPlan = report.UnitImprovementPlan,
+            ChallengesFaced = report.ChallengesFaced,
+            NationalSupportNeeded = report.NationalSupportNeeded,
+            OtherNotes = report.OtherNotes,
+            Programs = report.Programs
+                .OrderBy(p => p.ProgramId)
+                .Select(p => new StateProgramForm
+                {
+                    ProgramName = p.ProgramName,
+                    Objectives = p.Objectives,
+                    Outcomes = p.Outcomes,
+                    TotalAttendance = p.TotalAttendance,
+                    TotalBeneficiaries = p.TotalBeneficiaries
+                })
+                .ToList()
+        };
+    }
+}
+
+#endregion

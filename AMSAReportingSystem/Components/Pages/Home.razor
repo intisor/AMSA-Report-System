@@ -135,20 +135,9 @@ else
                 StateName = "", // Replace with actual value
                 NationalName = "", // Replace with actual value
                 Token = "", // Replace with actual value
-                Roles = roles.Select(role => ParseRole(role)).Select(parsed => $"{parsed.DepartmentName}:{parsed.LevelType}").ToList()
+                Roles = roles
             };
         }
-    }
-
-    private (string DepartmentName, string LevelType) ParseRole(string role)
-    {
-        var parts = role.Split(':');
-        if (parts.Length != 2)
-        {
-            throw new FormatException($"Invalid role format: {role}");
-        }
-
-        return (parts[0], parts[1]);
     }
 
     private void GoToLogin()

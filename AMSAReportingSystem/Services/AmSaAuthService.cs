@@ -1,4 +1,5 @@
 using AMSAReportingSystem.Components.Pages;
+using AMSAReportingSystem.Data.Entities;
 
 namespace AMSAReportingSystem.Services;
 
@@ -6,14 +7,14 @@ namespace AMSAReportingSystem.Services;
 /// Authentication service that integrates with AMSA API
 /// Replaces MockAuthService with real app-to-app authentication
 /// </summary>
-public class AmSaAuthService
+public class AMSAAuthService
 {
     private readonly IAmSaApiClient _apiClient;
-    private readonly ILogger<AmSaAuthService> _logger;
+    private readonly ILogger<AMSAAuthService> _logger;
     private string? _cachedToken;
     private DateTime _tokenExpiry;
 
-    public AmSaAuthService(IAmSaApiClient apiClient, ILogger<AmSaAuthService> logger)
+    public AMSAAuthService(IAmSaApiClient apiClient, ILogger<AMSAAuthService> logger)
     {
         _apiClient = apiClient;
         _logger = logger;
@@ -120,133 +121,32 @@ public class AmSaAuthService
     /// <summary>
     /// Parses roles in the format "DepartmentName:LevelType" into structured data.
     /// </summary>
-    private (string DepartmentName, string LevelType) ParseRole(string role)
+    private (string DepartmentName, LevelType LevelType) ParseRole(string role)
     {
-        var parts = role.Split(':');
+        var parts = role.Split(':', 2);
         if (parts.Length != 2)
         {
             throw new FormatException($"Invalid role format: {role}");
         }
 
-        return (parts[0], parts[1]);
+        if (!Enum.TryParse<LevelType>(parts[1], ignoreCase: true, out var levelType))
+        {
+            throw new FormatException($"Invalid level type in role: {role}");
+        }
+
+        return (parts[0], levelType);
     }
 
     /// <summary>
     /// Parses and categorizes roles for the authenticated member.
     /// </summary>
-    private string? DetermineDashboard(string levelType)
+    private static string DetermineDashboard(LevelType levelType)
     {
-        return levelType.ToLower() switch
+        return levelType switch
         {
-            "national" => "NationalDashboard",
-            "state" => "StateDashboard",
-            "unit" => "UnitDashboard",
-            _ => null
-        };
-    }
-}
-
-/// <summary>
-/// Authentication context containing member details and JWT token
-/// Maps from AMSA API member response to Reporting System user context
-/// </summary>
-public class AuthContext
-{
-    public int MemberId { get; set; }
-    public required int MkanId { get; set; }
-    public required string FirstName { get; set; }
-    public required string LastName { get; set; }
-    public required string Email { get; set; }
-    public int UnitId { get; set; }
-    public required string UnitName { get; set; }
-    public int StateId { get; set; }
-    public required string StateName { get; set; }
-    public int NationalId { get; set; }
-    public required string NationalName { get; set; }
-    public List<string?>? Dashboards { get; set; }
-    public required string Token { get; set; }
-    public DateTime TokenExpiry { get; set; }
-
-    /// <summary>
-    /// Roles in format "DepartmentName:LevelType"
-    /// </summary>
-    public required List<string> Roles { get; set; }
-
-    /// <summary>
-    /// Parsed roles with structured data
-    /// </summary>
-    public List<(string DepartmentName, string LevelType)> ParsedRoles { get; set; } = new List<(string DepartmentName, string LevelType)>();
-
-    /// <summary>
-    /// Check if token is still valid
-    /// </summary>
-    public bool IsTokenValid => DateTime.UtcNow < TokenExpiry;
-
-    /// <summary>
-    /// Check if user is authenticated (has valid token)
-    /// </summary>
-    public bool IsAuthenticated => IsTokenValid && !string.IsNullOrEmpty(Token);
-
-    /// <summary>
-    /// Get display name for member
-    /// </summary>
-    public string GetDisplayName() => $"{FirstName} {LastName}";
-
-    /// <summary>
-    /// Get full name
-    /// </summary>
-    public string FullName => GetDisplayName();
-
-    /// <summary>
-    /// Check if member has specific role (case-insensitive)
-    /// </summary>
-    public bool HasRole(string role) => Roles.Any(r => r.Equals(role, StringComparison.OrdinalIgnoreCase));
-
-    public string GetDashboard()
-    {
-        if (Dashboards?.Any(d => d == "NationalDashboard") == true)
-        {
-            return "NationalDashboard";
-        }
-
-        if (Dashboards?.Any(d => d == "StateDashboard") == true)
-        {
-            return "StateDashboard";
-        }
-
-        if (Dashboards?.Any(d => d == "UnitDashboard") == true)
-        {
-            return "UnitDashboard";
-        }
-
-        return ParsedRoles.FirstOrDefault().LevelType.ToLowerInvariant() switch
-        {
-            "national" => "NationalDashboard",
-            "state" => "StateDashboard",
-            "unit" => "UnitDashboard",
+            LevelType.National => "NationalDashboard",
+            LevelType.State => "StateDashboard",
             _ => "UnitDashboard"
         };
     }
-
-    public bool IsDepartmentOfficer => ParsedRoles.Any(r => r.LevelType.Equals("Unit", StringComparison.OrdinalIgnoreCase));
-    public bool IsUnitLeadership => ParsedRoles.Any(r =>
-        r.LevelType.Equals("Unit", StringComparison.OrdinalIgnoreCase) && IsLeadershipDepartment(r.DepartmentName));
-    public bool IsStateLeadership => ParsedRoles.Any(r =>
-        r.LevelType.Equals("State", StringComparison.OrdinalIgnoreCase) && IsLeadershipDepartment(r.DepartmentName));
-    public bool IsNationalLeadership => ParsedRoles.Any(r =>
-        r.LevelType.Equals("National", StringComparison.OrdinalIgnoreCase) && IsLeadershipDepartment(r.DepartmentName));
-    public bool HasSudoAccess => ParsedRoles.Any(r => IsLeadershipDepartment(r.DepartmentName));
-
-    private static bool IsLeadershipDepartment(string departmentName) =>
-        departmentName.Equals("President", StringComparison.OrdinalIgnoreCase) ||
-        departmentName.Equals("General", StringComparison.OrdinalIgnoreCase);
 }
-
-
-// Refactor Documentation
-// The role handling logic in AmSaAuthService.cs has been refactored to improve maintainability and scalability:
-// 1. ParseRole: Parses roles in the format "DepartmentName:LevelType".
-// 2. DetermineDashboard: Maps LevelType to specific dashboards.
-// 3. CanAccessDepartment: Determines department access based on DepartmentName.
-// 4. HasSudoAccess: Grants sudo access to President and General Secretary.
-// 5. AuthenticateAsync: Refactored to use the new methods for role parsing, dashboard determination, and department access.

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Options;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AMSAReportingSystem.Services;
 
@@ -8,22 +9,23 @@ namespace AMSAReportingSystem.Services;
 /// Implementation of AMSA API client using HttpClient
 /// Handles all 9 endpoint calls with error handling and logging
 /// </summary>
-public class AmSaApiClient : IAmSaApiClient
+public class AMSAApiClient : IAmSaApiClient
 {
     private readonly HttpClient _httpClient;
-    private readonly AmSaApiClientOptions _options;
-    private readonly ILogger<AmSaApiClient> _logger;
+    private readonly AMSAApiClientOptions _options;
+    private readonly ILogger<AMSAApiClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AmSaApiClient(HttpClient httpClient, IOptions<AmSaApiClientOptions> options, ILogger<AmSaApiClient> logger)
+    public AMSAApiClient(HttpClient httpClient, IOptions<AMSAApiClientOptions> options, ILogger<AMSAApiClient> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
+        _jsonOptions.Converters.Add(new JsonStringEnumConverter());
     }
 
     public async Task<Result<TokenResponse>> GenerateTokenAsync(string mkanId, IEnumerable<string> requestedScopes, CancellationToken ct = default)

@@ -9,15 +9,15 @@ namespace AMSAReportingSystem.Services;
 /// Custom auth state provider for the AMSA Reporting System
 /// Integrates with AMSA API for real authentication
 /// </summary>
-public class AmsaAuthStateProvider : AuthenticationStateProvider
+public class AMSAAuthStateProvider : AuthenticationStateProvider
 {
     private const string AuthStorageKey = "amsa.auth.context";
-    private readonly AmSaAuthService _authService;
+    private readonly AMSAAuthService _authService;
     private readonly IJSRuntime _jsRuntime;
-    private readonly ILogger<AmsaAuthStateProvider> _logger;
+    private readonly ILogger<AMSAAuthStateProvider> _logger;
     private AuthContext? _currentUser;
 
-    public AmsaAuthStateProvider(AmSaAuthService authService, IJSRuntime jsRuntime, ILogger<AmsaAuthStateProvider> logger)
+    public AMSAAuthStateProvider(AMSAAuthService authService, IJSRuntime jsRuntime, ILogger<AMSAAuthStateProvider> logger)
     {
         _authService = authService;
         _jsRuntime = jsRuntime;

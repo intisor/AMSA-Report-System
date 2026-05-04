@@ -14,31 +14,37 @@ builder.Services.AddRazorComponents()
 	.AddInteractiveWebAssemblyComponents();
 
 // Add database context
-builder.Services.AddDbContext<AmsaReportingDbContext>(options =>
-	options.UseSqlServer(builder.Configuration.GetConnectionString("AmsaReportingDb") 
-		?? "Server=(localdb)\\mssqllocaldb;Database=AmsaReportingDb;Trusted_Connection=true;"));
+builder.Services.AddDbContext<AMSAReportingDbContext>(options =>
+	options.UseSqlServer(builder.Configuration.GetConnectionString("AMSAReportingDb") 
+		?? "Server=(localdb)\\mssqllocaldb;Database=AMSAReportingDb;Trusted_Connection=true;"));
 
 // Configure AMSA API client options
-builder.Services.Configure<AmSaApiClientOptions>(
-	builder.Configuration.GetSection(AmSaApiClientOptions.SectionName));
+builder.Services.Configure<AMSAApiClientOptions>(
+	builder.Configuration.GetSection(AMSAApiClientOptions.SectionName));
 
 // Add typed HttpClient for AMSA API
-builder.Services.AddHttpClient<IAmSaApiClient, AmSaApiClient>((serviceProvider, client) =>
+builder.Services.AddHttpClient<IAmSaApiClient, AMSAApiClient>((serviceProvider, client) =>
 	{
-		var options = serviceProvider.GetRequiredService<IOptions<AmSaApiClientOptions>>();
+		var options = serviceProvider.GetRequiredService<IOptions<AMSAApiClientOptions>>();
 		client.BaseAddress = new Uri(options.Value.BaseUrl);
 		client.Timeout = TimeSpan.FromSeconds(options.Value.RequestTimeoutSeconds);
 	});
 
 // Add authentication services
-builder.Services.AddScoped<AmSaAuthService>();
-builder.Services.AddScoped<AmsaAuthStateProvider>();
-builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<AmsaAuthStateProvider>());
-builder.Services.AddSingleton<AmsaApiConnectionStatus>();
+// Authentication services
+builder.Services.AddScoped<AMSAAuthService>();
+builder.Services.AddScoped<AMSAAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<AMSAAuthStateProvider>());
+builder.Services.AddSingleton<AMSAApiConnectionStatus>();
+
+// API & Health services
+builder.Services.AddHostedService<AMSAApiStartupHealthCheckService>();
+
+// Authorization & Report services
 builder.Services.AddScoped<ReportAccessService>();
-builder.Services.AddScoped<ReportService>();
+builder.Services.AddScoped<UnifiedReportService>();
 builder.Services.AddScoped<CurrentUserReportService>();
-builder.Services.AddHostedService<AmsaApiStartupHealthCheckService>();
+
 builder.Services.AddAuthorizationCore();
 
 var app = builder.Build();

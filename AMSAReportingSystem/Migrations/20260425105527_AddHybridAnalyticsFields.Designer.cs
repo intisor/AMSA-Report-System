@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AMSAReportingSystem.Migrations
 {
-    [DbContext(typeof(AmsaReportingDbContext))]
+    [DbContext(typeof(AMSAReportingDbContext))]
     [Migration("20260425105527_AddHybridAnalyticsFields")]
     partial class AddHybridAnalyticsFields
     {

@@ -5,19 +5,25 @@ using System.Text.Json;
 
 namespace AMSAReportingSystem.Services;
 
-public class ReportService
+/// <summary>
+/// Unified service for all report-related operations
+/// Consolidates DepartmentReportService, StateReportService, and ReportLifecycleService functionality
+/// Organized by operational scope: Department Ops, State Ops, Report Lifecycle, and Cycles
+/// </summary>
+public class UnifiedReportService
 {
     private const int DefaultSubmissionGraceDays = 7;
-    private readonly AmsaReportingDbContext _db;
+
+    private readonly AMSAReportingDbContext _db;
     private readonly IAmSaApiClient _amSaApiClient;
     private readonly ReportAccessService _access;
-    private readonly ILogger<ReportService> _logger;
+    private readonly ILogger<UnifiedReportService> _logger;
 
-    public ReportService(
-        AmsaReportingDbContext db,
+    public UnifiedReportService(
+        AMSAReportingDbContext db,
         IAmSaApiClient amSaApiClient,
         ReportAccessService access,
-        ILogger<ReportService> logger)
+        ILogger<UnifiedReportService> logger)
     {
         _db = db;
         _amSaApiClient = amSaApiClient;
@@ -25,193 +31,124 @@ public class ReportService
         _logger = logger;
     }
 
-    public async Task<Report> GetOrCreateDraftAsync(AuthContext actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
+    #region Department Report Operations
+
+    /// <summary>
+    /// Saves department-specific report data to database
+    /// Validates JSON, checks permissions, and updates submission status
+    /// </summary>
+    public async Task<DepartmentReport> SaveDepartmentDataAsync(
+        int reportId,
+        DepartmentType department,
+        string reportDataJson,
+        AuthContext actor,
+        bool markSubmitted,
+        CancellationToken ct = default)
     {
-        var unit = await EnsureUnitExistsAsync(amsaUnitId, ct);
-        if (unit is null)
+        ValidateJson(reportDataJson);
+
+        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
+            ?? throw new InvalidOperationException($"Report {reportId} not found.");
+
+        var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
+
+        if (!_access.CanEditDepartment(actor, unit.Id, unit.StateId, department))
         {
-            throw new InvalidOperationException($"Unit with AMSA ID {amsaUnitId} could not be found locally or from AMSA API.");
+            throw new UnauthorizedAccessException("You are not allowed to edit this department report.");
         }
 
-        if (!_access.CanSubmitReportToPresident(actor, unit.Id, unit.StateId))
+        var departmentReport = await _db.DepartmentReports
+            .FirstOrDefaultAsync(d => d.ReportId == reportId && d.Department == department, ct);
+
+        if (departmentReport is null)
         {
-            throw new UnauthorizedAccessException("You are not allowed to create or manage reports for this unit.");
-        }
-
-        var existing = await _db.Reports
-            .Include(r => r.DepartmentReports)
-            .Include(r => r.ActivityLogs)
-            .FirstOrDefaultAsync(r => r.UnitId == unit.Id && r.CycleId == cycleId, ct);
-
-        if (existing is not null)
-        {
-            return existing;
-        }
-
-        var report = new Report
-        {
-            UnitId = unit.Id,
-            CycleId = cycleId,
-            Status = ReportStatus.Draft,
-            IsCompliant = false,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        _db.Reports.Add(report);
-        await _db.SaveChangesAsync(ct);
-
-        foreach (var department in Enum.GetValues<DepartmentType>())
-        {
-            _db.DepartmentReports.Add(new DepartmentReport
+            departmentReport = new DepartmentReport
             {
-                ReportId = report.Id,
+                ReportId = reportId,
                 CycleId = report.CycleId,
                 Department = department,
-                ReportData = "{}",
-                IsSubmitted = false,
+                ReportData = reportDataJson,
+                IsSubmitted = markSubmitted,
                 IsCompliant = false,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
-            });
+            };
+
+            _db.DepartmentReports.Add(departmentReport);
+        }
+        else
+        {
+            departmentReport.ReportData = reportDataJson;
+            if (markSubmitted)
+            {
+                departmentReport.IsSubmitted = true;
+                departmentReport.SubmittedAt = DateTime.UtcNow;
+                departmentReport.SubmittedByMemberId = actor.MemberId;
+            }
+            departmentReport.UpdatedAt = DateTime.UtcNow;
         }
 
         _db.ReportActivityLogs.Add(new ReportActivityLog
         {
-            ReportId = report.Id,
+            ReportId = reportId,
             ActionByMemberId = actor.MemberId,
-            Action = "ReportCreated",
-            ActionAt = DateTime.UtcNow
+            Action = markSubmitted ? "DepartmentReportSubmitted" : "DepartmentReportSaved",
+            ActionAt = DateTime.UtcNow,
+            Notes = $"Updated {department} report"
         });
 
         await _db.SaveChangesAsync(ct);
-        return await GetReportAsync(report.Id, ct) ?? report;
+        return departmentReport;
     }
 
-    public async Task<ReportingCycle> GetOrCreateActiveCycleAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Retrieves a specific department report with full data
+    /// </summary>
+    public async Task<DepartmentReport?> GetDepartmentReportAsync(
+        int reportId,
+        DepartmentType department,
+        CancellationToken ct = default)
     {
-        var today = DateTime.UtcNow.Date;
-
-        var active = await _db.ReportingCycles
-            .Where(c => !c.IsLocked && c.StartDate.Date <= today && c.EndDate.Date >= today)
-            .OrderByDescending(c => c.StartDate)
-            .FirstOrDefaultAsync(ct);
-
-        if (active is not null)
-        {
-            return active;
-        }
-
-        var latestUnlocked = await _db.ReportingCycles
-            .Where(c => !c.IsLocked)
-            .OrderByDescending(c => c.StartDate)
-            .FirstOrDefaultAsync(ct);
-
-        if (latestUnlocked is not null)
-        {
-            return latestUnlocked;
-        }
-
-        var start = new DateTime(today.Year, today.Month, 1);
-        var end = start.AddMonths(1).AddDays(-1);
-
-        var cycle = new ReportingCycle
-        {
-            CycleMonth = start.ToString("MMMM yyyy"),
-            StartDate = start,
-            EndDate = end,
-            SubmissionDeadline = end.AddDays(DefaultSubmissionGraceDays),
-            IsLocked = false,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        _db.ReportingCycles.Add(cycle);
-        await _db.SaveChangesAsync(ct);
-        return cycle;
+        return await _db.DepartmentReports
+            .FirstOrDefaultAsync(d => d.ReportId == reportId && d.Department == department, ct);
     }
 
-    public async Task<Report?> GetReportAsync(int reportId, CancellationToken ct = default)
-    {
-        return await _db.Reports
-            .Include(r => r.Unit)
-            .Include(r => r.Cycle)
-            .Include(r => r.DepartmentReports)
-            .Include(r => r.ActivityLogs)
-            .FirstOrDefaultAsync(r => r.Id == reportId, ct);
-    }
+    #endregion
 
-    public async Task<List<Report>> GetUnitReportsAsync(AuthContext actor, int unitId, int? cycleId = null, CancellationToken ct = default)
-    {
-        var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == unitId, ct)
-            ?? throw new InvalidOperationException($"Unit {unitId} not found.");
+    #region State Report Operations
 
-        if (!_access.CanReviewAtUnitLevel(actor, unit.Id))
-        {
-            throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
-        }
-
-        var selectedCycleId = cycleId ?? (await GetOrCreateActiveCycleAsync(ct)).Id;
-
-        return await _db.Reports
-            .Include(r => r.Unit)
-            .Include(r => r.Cycle)
-            .Include(r => r.DepartmentReports)
-            .Where(r => r.UnitId == unitId && r.CycleId == selectedCycleId)
-            .OrderByDescending(r => r.UpdatedAt)
-            .ToListAsync(ct);
-    }
-
-    public async Task<List<Report>> GetStateReportsAsync(AuthContext actor, int stateId, int? cycleId = null, CancellationToken ct = default)
-    {
-        if (!_access.CanReviewAtStateLevel(actor, stateId))
-        {
-            throw new UnauthorizedAccessException("You are not allowed to view reports for this state.");
-        }
-
-        var selectedCycleId = cycleId ?? (await GetOrCreateActiveCycleAsync(ct)).Id;
-
-        return await _db.Reports
-            .Include(r => r.Unit)
-            .Include(r => r.Cycle)
-            .Include(r => r.DepartmentReports)
-            .Where(r => r.CycleId == selectedCycleId && r.Unit.StateId == stateId)
-            .OrderBy(r => r.Unit.Name)
-            .ToListAsync(ct);
-    }
-
-    public async Task<List<Report>> GetNationalReportsAsync(AuthContext actor, int? cycleId = null, CancellationToken ct = default)
-    {
-        if (!_access.IsNationalLeadership(actor))
-        {
-            throw new UnauthorizedAccessException("Only national leadership can view national report board.");
-        }
-
-        var selectedCycleId = cycleId ?? (await GetOrCreateActiveCycleAsync(ct)).Id;
-
-        return await _db.Reports
-            .Include(r => r.Unit)
-                .ThenInclude(u => u.State)
-            .Include(r => r.Cycle)
-            .Include(r => r.DepartmentReports)
-            .Where(r => r.CycleId == selectedCycleId)
-            .OrderBy(r => r.Unit.State.Name)
-            .ThenBy(r => r.Unit.Name)
-            .ToListAsync(ct);
-    }
-
-    public async Task<StateReport> GetOrCreateStateReportAsync(AuthContext actor, int stateId, int cycleId, CancellationToken ct = default)
+    /// <summary>
+    /// Retrieves state-level report with authorization check
+    /// Includes programs and activity logs
+    /// </summary>
+    public async Task<StateReport?> GetStateReportAsync(
+        AuthContext actor,
+        int stateId,
+        int cycleId,
+        CancellationToken ct = default)
     {
         if (!_access.CanReviewAtStateLevel(actor, stateId))
         {
             throw new UnauthorizedAccessException("You are not allowed to manage this state report.");
         }
 
-        var existing = await _db.StateReports
+        return await _db.StateReports
             .Include(sr => sr.Programs)
             .Include(sr => sr.ActivityLogs)
             .FirstOrDefaultAsync(sr => sr.StateId == stateId && sr.CycleId == cycleId, ct);
+    }
 
+    /// <summary>
+    /// Ensures a state report exists, creating if necessary
+    /// Initializes with Draft status
+    /// </summary>
+    public async Task<StateReport> EnsureStateReportAsync(
+        AuthContext actor,
+        int stateId,
+        int cycleId,
+        CancellationToken ct = default)
+    {
+        var existing = await GetStateReportAsync(actor, stateId, cycleId, ct);
         if (existing is not null)
         {
             return existing;
@@ -244,14 +181,10 @@ public class ReportService
             .FirstAsync(sr => sr.Id == report.Id, ct);
     }
 
-    public async Task<StateReport?> GetStateReportAsync(int stateReportId, CancellationToken ct = default)
-    {
-        return await _db.StateReports
-            .Include(sr => sr.Programs)
-            .Include(sr => sr.ActivityLogs)
-            .FirstOrDefaultAsync(sr => sr.Id == stateReportId, ct);
-    }
-
+    /// <summary>
+    /// Updates state report with aggregated data and leadership notes
+    /// Validates form data and manages program list updates
+    /// </summary>
     public async Task<StateReport> SaveStateReportAsync(
         AuthContext actor,
         int stateReportId,
@@ -329,66 +262,184 @@ public class ReportService
             .FirstAsync(sr => sr.Id == stateReport.Id, ct);
     }
 
-    public async Task<DepartmentReport> SaveDepartmentDataAsync(
-        int reportId,
-        DepartmentType department,
-        string reportDataJson,
-        AuthContext actor,
-        bool markSubmitted,
-        CancellationToken ct = default)
+    #endregion
+
+    #region Report Lifecycle & Submission Operations
+
+    /// <summary>
+    /// Retrieves a specific report with all related data
+    /// </summary>
+    public async Task<Report?> GetReportAsync(int reportId, CancellationToken ct = default)
     {
-        ValidateJson(reportDataJson);
+        return await _db.Reports
+            .Include(r => r.Unit)
+            .Include(r => r.Cycle)
+            .Include(r => r.DepartmentReports)
+            .Include(r => r.ActivityLogs)
+            .FirstOrDefaultAsync(r => r.Id == reportId, ct);
+    }
 
-        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
-            ?? throw new InvalidOperationException($"Report {reportId} not found.");
-        await EnsureCycleOpenForEditsAsync(report.CycleId, ct);
-        var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
-
-        if (!_access.CanEditDepartment(actor, unit.Id, unit.StateId, department))
+    /// <summary>
+    /// Retrieves draft report for unit if authorized
+    /// </summary>
+    public async Task<Report?> GetDraftAsync(AuthContext actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
+    {
+        var unit = await EnsureUnitExistsAsync(amsaUnitId, ct);
+        if (unit is null)
         {
-            throw new UnauthorizedAccessException("You are not allowed to edit this department report.");
+            throw new InvalidOperationException($"Unit with AMSA ID {amsaUnitId} could not be found locally or from AMSA API.");
         }
 
-        var departmentReport = await _db.DepartmentReports
-            .FirstOrDefaultAsync(d => d.ReportId == reportId && d.Department == department, ct);
-
-        if (departmentReport is null)
+        if (!_access.CanInitiateReportSubmission(actor, unit.Id, unit.StateId))
         {
-            departmentReport = new DepartmentReport
+            throw new UnauthorizedAccessException("You are not allowed to create or manage reports for this unit.");
+        }
+
+        return await _db.Reports
+            .Include(r => r.DepartmentReports)
+            .Include(r => r.ActivityLogs)
+            .FirstOrDefaultAsync(r => r.UnitId == unit.Id && r.CycleId == cycleId, ct);
+    }
+
+    /// <summary>
+    /// Creates draft report for unit with all departments initialized
+    /// </summary>
+    public async Task<Report> EnsureDraftAsync(AuthContext actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
+    {
+        var existing = await GetDraftAsync(actor, amsaUnitId, cycleId, ct);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var unit = await EnsureUnitExistsAsync(amsaUnitId, ct)
+            ?? throw new InvalidOperationException($"Unit with AMSA ID {amsaUnitId} could not be found locally or from AMSA API.");
+
+        var report = new Report
+        {
+            UnitId = unit.Id,
+            CycleId = cycleId,
+            Status = ReportStatus.Draft,
+            IsCompliant = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _db.Reports.Add(report);
+        await _db.SaveChangesAsync(ct);
+
+        foreach (var department in ReportDepartmentCatalog.ReportableDepartments)
+        {
+            _db.DepartmentReports.Add(new DepartmentReport
             {
-                ReportId = reportId,
+                ReportId = report.Id,
+                CycleId = report.CycleId,
                 Department = department,
-                CreatedAt = DateTime.UtcNow
-            };
-            _db.DepartmentReports.Add(departmentReport);
-        }
-
-        departmentReport.ReportData = reportDataJson;
-        departmentReport.CycleId = report.CycleId;
-        ApplyExtractedFields(departmentReport, reportDataJson);
-        departmentReport.UpdatedAt = DateTime.UtcNow;
-
-        if (markSubmitted)
-        {
-            departmentReport.IsSubmitted = true;
-            departmentReport.SubmittedAt = DateTime.UtcNow;
-            departmentReport.SubmittedByMemberId = actor.MemberId;
+                ReportData = "{}",
+                IsSubmitted = false,
+                IsCompliant = false,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
         }
 
         _db.ReportActivityLogs.Add(new ReportActivityLog
         {
-            ReportId = reportId,
+            ReportId = report.Id,
             ActionByMemberId = actor.MemberId,
-            Action = markSubmitted ? $"DepartmentSubmitted:{department}" : $"DepartmentSaved:{department}",
+            Action = "ReportCreated",
             ActionAt = DateTime.UtcNow
         });
 
-        report.UpdatedAt = DateTime.UtcNow;
-
         await _db.SaveChangesAsync(ct);
-        return departmentReport;
+        return await GetReportAsync(report.Id, ct) ?? report;
     }
 
+    /// <summary>
+    /// Retrieves all reports for a unit with optional cycle filter
+    /// </summary>
+    public async Task<List<Report>> GetUnitReportsAsync(AuthContext actor, int unitId, int? cycleId = null, CancellationToken ct = default)
+    {
+        var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == unitId, ct)
+            ?? throw new InvalidOperationException($"Unit {unitId} not found.");
+
+        if (!_access.CanReviewAtUnitLevel(actor, unit.Id))
+        {
+            throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
+        }
+
+        var selectedCycleId = await ResolveCycleIdAsync(cycleId, ct);
+        if (selectedCycleId is null)
+        {
+            return [];
+        }
+
+        return await _db.Reports
+            .Include(r => r.Unit)
+            .Include(r => r.Cycle)
+            .Include(r => r.DepartmentReports)
+            .Where(r => r.UnitId == unitId && r.CycleId == selectedCycleId.Value)
+            .OrderByDescending(r => r.UpdatedAt)
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Retrieves all reports for a state with optional cycle filter
+    /// </summary>
+    public async Task<List<Report>> GetStateReportsAsync(AuthContext actor, int stateId, int? cycleId = null, CancellationToken ct = default)
+    {
+        if (!_access.CanReviewAtStateLevel(actor, stateId))
+        {
+            throw new UnauthorizedAccessException("You are not allowed to view reports for this state.");
+        }
+
+        var selectedCycleId = await ResolveCycleIdAsync(cycleId, ct);
+        if (selectedCycleId is null)
+        {
+            return [];
+        }
+
+        return await _db.Reports
+            .Include(r => r.Unit)
+            .Include(r => r.Cycle)
+            .Include(r => r.DepartmentReports)
+            .Where(r => r.CycleId == selectedCycleId.Value && r.Unit.StateId == stateId)
+            .OrderBy(r => r.Unit.Name)
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Retrieves all reports nationally with optional cycle filter
+    /// National leadership only
+    /// </summary>
+    public async Task<List<Report>> GetNationalReportsAsync(AuthContext actor, int? cycleId = null, CancellationToken ct = default)
+    {
+        if (!_access.IsNationalLeadership(actor))
+        {
+            throw new UnauthorizedAccessException("Only national leadership can view national report board.");
+        }
+
+        var selectedCycleId = await ResolveCycleIdAsync(cycleId, ct);
+        if (selectedCycleId is null)
+        {
+            return [];
+        }
+
+        return await _db.Reports
+            .Include(r => r.Unit)
+                .ThenInclude(u => u.State)
+            .Include(r => r.Cycle)
+            .Include(r => r.DepartmentReports)
+            .Where(r => r.CycleId == selectedCycleId.Value)
+            .OrderBy(r => r.Unit.State.Name)
+            .ThenBy(r => r.Unit.Name)
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Submits report from unit to president for review
+    /// All departments must be submitted first
+    /// </summary>
     public async Task<Report> SubmitReportToPresidentAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports
@@ -398,7 +449,7 @@ public class ReportService
         await EnsureCycleOpenForEditsAsync(report.CycleId, ct);
 
         var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
-        if (!_access.CanSubmitReportToPresident(actor, unit.Id, unit.StateId))
+        if (!_access.CanInitiateReportSubmission(actor, unit.Id, unit.StateId))
         {
             throw new UnauthorizedAccessException("You are not allowed to submit this report.");
         }
@@ -408,8 +459,7 @@ public class ReportService
             throw new InvalidOperationException($"Report {reportId} cannot be submitted from status {report.Status}.");
         }
 
-        var allSubmitted = report.DepartmentReports.All(d => d.IsSubmitted);
-        if (!allSubmitted)
+        if (report.DepartmentReports.Any(d => !d.IsSubmitted))
         {
             throw new InvalidOperationException("All department reports must be submitted before report submission.");
         }
@@ -432,6 +482,9 @@ public class ReportService
         return report;
     }
 
+    /// <summary>
+    /// Unit president approves report, moving to state level
+    /// </summary>
     public async Task<Report> ApproveByUnitLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
@@ -467,6 +520,9 @@ public class ReportService
         return report;
     }
 
+    /// <summary>
+    /// Unit president rejects report, sending back to unit for revisions
+    /// </summary>
     public async Task<Report> RejectByUnitLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
@@ -500,6 +556,9 @@ public class ReportService
         return report;
     }
 
+    /// <summary>
+    /// State leadership approves report, moving to national level
+    /// </summary>
     public async Task<Report> ApproveByStateLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
@@ -535,6 +594,9 @@ public class ReportService
         return report;
     }
 
+    /// <summary>
+    /// State leadership rejects report, sending back to unit
+    /// </summary>
     public async Task<Report> RejectByStateLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
@@ -568,6 +630,9 @@ public class ReportService
         return report;
     }
 
+    /// <summary>
+    /// National leadership acknowledges report completion
+    /// </summary>
     public async Task<Report> AcknowledgeByNationalAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         if (!_access.IsNationalLeadership(actor))
@@ -602,6 +667,158 @@ public class ReportService
         return report;
     }
 
+    #endregion
+
+    #region Reporting Cycle Management
+
+    /// <summary>
+    /// Retrieves active reporting cycle
+    /// Falls back to most recent unlocked cycle if no active cycle found
+    /// </summary>
+    public async Task<ReportingCycle?> GetActiveCycleAsync(CancellationToken ct = default)
+    {
+        var today = DateTime.UtcNow.Date;
+
+        var active = await _db.ReportingCycles
+            .Where(c => !c.IsLocked && c.StartDate.Date <= today && c.EndDate.Date >= today)
+            .OrderByDescending(c => c.StartDate)
+            .FirstOrDefaultAsync(ct);
+
+        if (active is not null)
+        {
+            return active;
+        }
+
+        return await _db.ReportingCycles
+            .Where(c => !c.IsLocked)
+            .OrderByDescending(c => c.StartDate)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>
+    /// Ensures active cycle exists, creating if necessary
+    /// </summary>
+    public async Task<ReportingCycle> EnsureActiveCycleAsync(CancellationToken ct = default)
+    {
+        var existing = await GetActiveCycleAsync(ct);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var today = DateTime.UtcNow.Date;
+        var start = new DateTime(today.Year, today.Month, 1);
+        var end = start.AddMonths(1).AddDays(-1);
+
+        var cycle = new ReportingCycle
+        {
+            CycleMonth = start.ToString("MMMM yyyy"),
+            StartDate = start,
+            EndDate = end,
+            SubmissionDeadline = end.AddDays(DefaultSubmissionGraceDays),
+            IsLocked = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _db.ReportingCycles.Add(cycle);
+        await _db.SaveChangesAsync(ct);
+        return cycle;
+    }
+
+    /// <summary>
+    /// Ensures cycle is open for editing, locks if past deadline
+    /// Throws if cycle is locked
+    /// </summary>
+    public async Task EnsureCycleOpenForEditsAsync(int cycleId, CancellationToken ct = default)
+    {
+        var cycle = await _db.ReportingCycles.FirstOrDefaultAsync(c => c.Id == cycleId, ct)
+            ?? throw new InvalidOperationException($"Reporting cycle {cycleId} was not found.");
+
+        var isPastDeadline = DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
+        if (isPastDeadline && !cycle.IsLocked)
+        {
+            cycle.IsLocked = true;
+            cycle.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        if (cycle.IsLocked || isPastDeadline)
+        {
+            throw new InvalidOperationException(
+                $"This reporting cycle is locked. Submission deadline was {cycle.SubmissionDeadline:MMMM d, yyyy}.");
+        }
+    }
+
+    #endregion
+
+    #region Utilities
+
+    /// <summary>
+    /// Validates JSON format
+    /// </summary>
+    private static void ValidateJson(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            throw new ArgumentException("Report data JSON cannot be empty.", nameof(json));
+
+        try
+        {
+            JsonDocument.Parse(json);
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException("Invalid JSON format in report data.", nameof(json), ex);
+        }
+    }
+
+    /// <summary>
+    /// Validates state report form data
+    /// </summary>
+    private static void ValidateStateReportForm(StateReportForm form)
+    {
+        if (form.UnitPresidentsAttended < 0 || form.TotalUnitPresidents < 0)
+        {
+            throw new InvalidOperationException("Attendance values cannot be negative.");
+        }
+
+        if (form.UnitPresidentsAttended > form.TotalUnitPresidents)
+        {
+            throw new InvalidOperationException("Unit presidents attended cannot exceed total unit presidents.");
+        }
+
+        if (form.UnitPerformanceRating is < 0 or > 100)
+        {
+            throw new InvalidOperationException("Unit performance rating must be between 0 and 100.");
+        }
+
+        foreach (var program in form.Programs)
+        {
+            if (program.TotalAttendance < 0 || program.TotalBeneficiaries < 0)
+            {
+                throw new InvalidOperationException("Program attendance and beneficiaries cannot be negative.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resolves cycle ID, using explicit cycle if provided, otherwise active cycle
+    /// </summary>
+    private async Task<int?> ResolveCycleIdAsync(int? cycleId, CancellationToken ct)
+    {
+        if (cycleId.HasValue)
+        {
+            var explicitCycle = await _db.ReportingCycles.FirstOrDefaultAsync(c => c.Id == cycleId.Value, ct);
+            return explicitCycle?.Id;
+        }
+
+        var cycle = await GetActiveCycleAsync(ct);
+        return cycle?.Id;
+    }
+
+    /// <summary>
+    /// Ensures unit exists locally, syncing from AMSA API if needed
+    /// </summary>
     private async Task<Unit?> EnsureUnitExistsAsync(int amsaUnitId, CancellationToken ct)
     {
         var existing = await _db.Units.FirstOrDefaultAsync(u => u.AmsaDbUnitId == amsaUnitId, ct);
@@ -648,138 +865,5 @@ public class ReportService
         return unit;
     }
 
-    private static void ApplyExtractedFields(DepartmentReport row, string reportDataJson)
-    {
-        using var doc = JsonDocument.Parse(reportDataJson);
-        var root = doc.RootElement;
-
-        row.SessionsOrganized = GetInt(root, "sessionsOrganized");
-        row.AttendanceCount = GetInt(root, "attendanceCount");
-        row.TotalMemberCount = GetInt(root, "totalMemberCount");
-        row.HasOnCampusActivity = GetBool(root, "hasOnCampusActivity");
-        row.ProgramCount = GetInt(root, "programCount");
-        row.MemberParticipantCount = GetInt(root, "memberParticipantCount");
-        row.DuesCollected = GetDecimal(root, "duesCollected");
-        row.ExpectedDues = GetDecimal(root, "expectedDues");
-        row.BeneficiaryCount = GetInt(root, "beneficiaryCount");
-
-        row.IsCompliant = ComputeCompliance(row);
-    }
-
-    private static bool ComputeCompliance(DepartmentReport row)
-    {
-        return row.Department switch
-        {
-            DepartmentType.Taleem => (row.SessionsOrganized ?? 0) >= 4 &&
-                                     MeetsPercent(row.AttendanceCount, row.TotalMemberCount, 75m),
-            DepartmentType.Tabligh => row.HasOnCampusActivity == true,
-            DepartmentType.Welfare => (row.ProgramCount ?? 0) >= 2,
-            DepartmentType.Sport => MeetsPercent(row.MemberParticipantCount, row.TotalMemberCount, 75m),
-            DepartmentType.Finance => (row.ExpectedDues ?? 0m) <= 0m ||
-                                      (row.DuesCollected ?? 0m) >= (row.ExpectedDues ?? 0m),
-            DepartmentType.Health => true,
-            DepartmentType.SecondarySchool => true,
-            DepartmentType.Tajneed => true,
-            DepartmentType.General => true,
-            _ => row.IsCompliant
-        };
-    }
-
-    private static bool MeetsPercent(int? numerator, int? denominator, decimal percent)
-    {
-        if (!numerator.HasValue || !denominator.HasValue || denominator.Value <= 0) return false;
-        return (numerator.Value * 100m / denominator.Value) >= percent;
-    }
-
-    private static int? GetInt(JsonElement root, string name)
-    {
-        if (!root.TryGetProperty(name, out var prop)) return null;
-        return prop.ValueKind switch
-        {
-            JsonValueKind.Number when prop.TryGetInt32(out var v) => v,
-            JsonValueKind.String when int.TryParse(prop.GetString(), out var v) => v,
-            _ => null
-        };
-    }
-
-    private static decimal? GetDecimal(JsonElement root, string name)
-    {
-        if (!root.TryGetProperty(name, out var prop)) return null;
-        return prop.ValueKind switch
-        {
-            JsonValueKind.Number when prop.TryGetDecimal(out var v) => v,
-            JsonValueKind.String when decimal.TryParse(prop.GetString(), out var v) => v,
-            _ => null
-        };
-    }
-
-    private static bool? GetBool(JsonElement root, string name)
-    {
-        if (!root.TryGetProperty(name, out var prop)) return null;
-        return prop.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.String when bool.TryParse(prop.GetString(), out var v) => v,
-            _ => null
-        };
-    }
-
-    private static void ValidateJson(string json)
-    {
-        try
-        {
-            using var _ = JsonDocument.Parse(json);
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException("Invalid JSON payload for department report.", ex);
-        }
-    }
-
-    private async Task EnsureCycleOpenForEditsAsync(int cycleId, CancellationToken ct)
-    {
-        var cycle = await _db.ReportingCycles.FirstOrDefaultAsync(c => c.Id == cycleId, ct)
-            ?? throw new InvalidOperationException($"Reporting cycle {cycleId} was not found.");
-
-        var isPastDeadline = DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
-        if (isPastDeadline && !cycle.IsLocked)
-        {
-            cycle.IsLocked = true;
-            cycle.UpdatedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-        }
-
-        if (cycle.IsLocked || isPastDeadline)
-        {
-            throw new InvalidOperationException(
-                $"This reporting cycle is locked. Submission deadline was {cycle.SubmissionDeadline:MMMM d, yyyy}.");
-        }
-    }
-
-    private static void ValidateStateReportForm(StateReportForm form)
-    {
-        if (form.UnitPresidentsAttended < 0 || form.TotalUnitPresidents < 0)
-        {
-            throw new InvalidOperationException("Attendance values cannot be negative.");
-        }
-
-        if (form.UnitPresidentsAttended > form.TotalUnitPresidents)
-        {
-            throw new InvalidOperationException("Unit presidents attended cannot exceed total unit presidents.");
-        }
-
-        if (form.UnitPerformanceRating is < 0 or > 100)
-        {
-            throw new InvalidOperationException("Unit performance rating must be between 0 and 100.");
-        }
-
-        foreach (var program in form.Programs)
-        {
-            if (program.TotalAttendance < 0 || program.TotalBeneficiaries < 0)
-            {
-                throw new InvalidOperationException("Program attendance and beneficiaries cannot be negative.");
-            }
-        }
-    }
+    #endregion
 }

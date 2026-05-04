@@ -1,3 +1,5 @@
+using AMSAReportingSystem.Data.Entities;
+
 namespace AMSAReportingSystem.Services;
 
 /// <summary>
@@ -139,7 +141,7 @@ public class NationalDto
 public class RoleDto
 {
     public required string DepartmentName { get; set; }
-    public required string LevelType { get; set; } // Expected values: "Unit", "State", "National"
+    public required LevelType LevelType { get; set; }
 }
 
 /// <summary>

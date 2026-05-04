@@ -143,9 +143,9 @@ public class DepartmentReport
 public class Role
 {
     public string DepartmentName { get; set; } = string.Empty;
-    public string LevelType { get; set; } = string.Empty;
+    public LevelType LevelType { get; set; }
 
-    public (string DepartmentName, string LevelType) ParseRole()
+    public (string DepartmentName, LevelType LevelType) ParseRole()
     {
         return (DepartmentName, LevelType);
     }

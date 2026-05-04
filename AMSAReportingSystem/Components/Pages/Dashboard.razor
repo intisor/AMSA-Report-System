@@ -1,6 +1,7 @@
 @page "/dashboard"
 @using Microsoft.AspNetCore.Components.Authorization
 @using AMSAReportingSystem.Services
+@using AMSAReportingSystem.Data.Entities
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Nav
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -64,7 +65,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var amsaProvider = (AmsaAuthStateProvider)AuthStateProvider;
+        var amsaProvider = (AMSAAuthStateProvider)AuthStateProvider;
         CurrentUser = amsaProvider.GetCurrentUser();
         if (CurrentUser == null)
         {
@@ -82,7 +83,7 @@ else
             return "State Leadership";
         if (CurrentUser.IsUnitLeadership)
             return "Unit Leadership";
-        if (CurrentUser.ParsedRoles.Any(role => role.LevelType.Equals("Unit", StringComparison.OrdinalIgnoreCase)))
+        if (CurrentUser.ParsedRoles.Any(role => role.LevelType == LevelType.Unit))
             return "Department Officer";
         return "User";
     }

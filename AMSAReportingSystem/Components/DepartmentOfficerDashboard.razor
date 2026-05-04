@@ -214,12 +214,12 @@
 
         try
         {
-            var cycle = await CurrentUserReportService.GetActiveCycleAsync();
+            var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
             DeadlineLabel = cycle.SubmissionDeadline.ToString("MMMM d, yyyy");
             DaysLeft = (cycle.SubmissionDeadline.Date - DateTime.UtcNow.Date).Days;
 
-            CurrentReport = await CurrentUserReportService.GetOrCreateCurrentUserDraftAsync(cycle.Id);
+            CurrentReport = await CurrentUserReportService.EnsureCurrentUserDraftAsync(cycle.Id);
             TotalDepartments = CurrentReport.DepartmentReports.Count == 0 ? 9 : CurrentReport.DepartmentReports.Count;
             SubmittedDepartments = CurrentReport.DepartmentReports.Count(d => d.IsSubmitted);
             RecentActivity = CurrentReport.ActivityLogs
@@ -248,7 +248,7 @@
 
         var allowed = new List<DepartmentType>();
 
-        foreach (var department in Enum.GetValues<DepartmentType>())
+        foreach (var department in ReportDepartmentCatalog.ReportableDepartments)
         {
             if (ReportAccessService.CanEditDepartment(CurrentUser, CurrentUser.UnitId, CurrentUser.StateId, department))
             {

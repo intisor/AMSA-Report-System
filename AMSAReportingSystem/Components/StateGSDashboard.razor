@@ -216,7 +216,7 @@
         IsLoading = true;
         try
         {
-            var cycle = await CurrentUserReportService.GetActiveCycleAsync();
+            var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
             DeadlineLabel = cycle.SubmissionDeadline.ToString("MMMM d, yyyy");
             IsCycleLocked = cycle.IsLocked || DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
@@ -224,7 +224,7 @@
             Reports = await CurrentUserReportService.GetMyStateReportsAsync(cycle.Id);
             NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
 
-            var stateReport = await CurrentUserReportService.GetOrCreateMyStateReportAsync(cycle.Id);
+            var stateReport = await CurrentUserReportService.EnsureMyStateReportAsync(cycle.Id);
             StateReportId = stateReport.Id;
             StateReportSubmitted = stateReport.Status is ReportStatus.SubmittedToNational or ReportStatus.Acknowledged;
             StateForm = StateReportFormMapper.ToForm(stateReport);
