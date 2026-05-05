@@ -38,7 +38,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredServ
 builder.Services.AddSingleton<AMSAApiConnectionStatus>();
 
 // API & Health services
-builder.Services.AddHostedService<AMSAApiStartupHealthCheckService>();
+// builder.Services.AddHostedService<AMSAApiStartupHealthCheckService>();
 
 // Authorization & Report services
 builder.Services.AddScoped<ReportAccessService>();
