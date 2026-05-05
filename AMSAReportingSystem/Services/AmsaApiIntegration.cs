@@ -282,7 +282,7 @@ public class AmsaApiClientOptions
     public const string SectionName = "AMSAApi";
 
     /// <summary>
-    /// Base URL of the AMSA API (e.g., https://api-dev.amsa.ng)
+    /// Base URL of the AMSA API (
     /// </summary>
     public required string BaseUrl { get; set; }
 

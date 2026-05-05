@@ -12,26 +12,18 @@ namespace AMSAReportingSystem.Services;
 /// Consolidates DepartmentReportService, StateReportService, and ReportLifecycleService functionality
 /// Organized by operational scope: Department Ops, State Ops, Report Lifecycle, and Cycles
 /// </summary>
-public class UnifiedReportService
+public class UnifiedReportService(
+    AMSAReportingDbContext db,
+    IAmsaApiClient amSaApiClient,
+    ReportAccessService access,
+    ILogger<UnifiedReportService> logger)
 {
     private const int DefaultSubmissionGraceDays = 7;
 
-    private readonly AMSAReportingDbContext _db;
-    private readonly IAmsaApiClient _amSaApiClient;
-    private readonly ReportAccessService _access;
-    private readonly ILogger<UnifiedReportService> _logger;
-
-    public UnifiedReportService(
-        AMSAReportingDbContext db,
-        IAmsaApiClient amSaApiClient,
-        ReportAccessService access,
-        ILogger<UnifiedReportService> logger)
-    {
-        _db = db;
-        _amSaApiClient = amSaApiClient;
-        _access = access;
-        _logger = logger;
-    }
+    private readonly AMSAReportingDbContext _db = db;
+    private readonly IAmsaApiClient _amSaApiClient = amSaApiClient;
+    private readonly ReportAccessService _access = access;
+    private readonly ILogger<UnifiedReportService> _logger = logger;
 
     #region Department Report Operations
 
@@ -142,7 +134,7 @@ public class UnifiedReportService
 
     /// <summary>
     /// Ensures a state report exists, creating if necessary
-    /// Initializes with Draft status
+    /// Initializes with Draft status and links available submitted department reports
     /// </summary>
     public async Task<StateReport> EnsureStateReportAsync(
         AuthContext actor,
@@ -176,6 +168,9 @@ public class UnifiedReportService
             ActionAt = DateTime.UtcNow
         });
         await _db.SaveChangesAsync(ct);
+
+        // Link existing submitted department reports
+        await LinkDepartmentReportsToStateReportAsync(report, ct);
 
         return await _db.StateReports
             .Include(sr => sr.Programs)
@@ -246,6 +241,9 @@ public class UnifiedReportService
             stateReport.Status = ReportStatus.SubmittedToNational;
             stateReport.SubmittedAt = DateTime.UtcNow;
             stateReport.SubmittedByMemberId = actor.MemberId;
+
+            // Link submitted department reports for audit trail
+            await LinkDepartmentReportsToStateReportAsync(stateReport, ct);
         }
 
         _db.StateReportActivityLogs.Add(new StateReportActivityLog
@@ -855,6 +853,49 @@ public class UnifiedReportService
         return unit;
     }
 
+    /// <summary>
+    /// Links all submitted department reports from units in a state to the state report
+    /// Used for rollup aggregation and audit trail
+    /// </summary>
+    private async Task LinkDepartmentReportsToStateReportAsync(StateReport stateReport, CancellationToken ct)
+    {
+        // Get all units in this state
+        var unitIds = await _db.Units
+            .Where(u => u.StateId == stateReport.StateId)
+            .Select(u => u.Id)
+            .ToListAsync(ct);
+
+        if (unitIds.Count == 0)
+            return;
+
+        // Get all submitted department reports for these units in this cycle
+        var submittedDepartmentReports = await _db.DepartmentReports
+            .Where(dr => _db.Reports
+                .Where(r => r.CycleId == stateReport.CycleId && unitIds.Contains(r.UnitId))
+                .Select(r => r.Id)
+                .Contains(dr.ReportId) && dr.IsSubmitted)
+            .ToListAsync(ct);
+
+        // Remove existing links
+        var existingLinks = await _db.StateReportDepartmentData
+            .Where(srd => srd.StateReportId == stateReport.Id)
+            .ToListAsync(ct);
+        _db.StateReportDepartmentData.RemoveRange(existingLinks);
+
+        // Create new links
+        var newLinks = submittedDepartmentReports
+            .Select(dr => new StateReportDepartmentData
+            {
+                StateReportId = stateReport.Id,
+                DepartmentReportId = dr.Id,
+                AddedAt = DateTime.UtcNow
+            })
+            .ToList();
+
+        _db.StateReportDepartmentData.AddRange(newLinks);
+        await _db.SaveChangesAsync(ct);
+    }
+
     #endregion
 }
 
@@ -867,18 +908,12 @@ public class UnifiedReportService
 /// Wraps UnifiedReportService with automatic user context retrieval
 /// Reduces boilerplate in components
 /// </summary>
-public class CurrentUserReportService
+public class CurrentUserReportService(
+    AMSAAuthStateProvider authStateProvider,
+    UnifiedReportService reportService)
 {
-    private readonly AMSAAuthStateProvider _authStateProvider;
-    private readonly UnifiedReportService _reportService;
-
-    public CurrentUserReportService(
-        AMSAAuthStateProvider authStateProvider,
-        UnifiedReportService reportService)
-    {
-        _authStateProvider = authStateProvider;
-        _reportService = reportService;
-    }
+    private readonly AMSAAuthStateProvider _authStateProvider = authStateProvider;
+    private readonly UnifiedReportService _reportService = reportService;
 
     #region Reporting Cycle & Draft Management
 

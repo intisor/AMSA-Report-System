@@ -52,6 +52,7 @@ public class StateReport
     public ICollection<StateReportProgram> Programs { get; set; } = new List<StateReportProgram>();
     public ICollection<StateReportAttachment> Attachments { get; set; } = new List<StateReportAttachment>();
     public ICollection<StateReportActivityLog> ActivityLogs { get; set; } = new List<StateReportActivityLog>();
+    public ICollection<StateReportDepartmentData> DepartmentDataLinks { get; set; } = new List<StateReportDepartmentData>();
 }
 
 /// <summary>
@@ -122,4 +123,22 @@ public class StateReportActivityLog
 
     // Foreign key
     public StateReport StateReport { get; set; } = null!;
+}
+
+/// <summary>
+/// Junction entity linking StateReport to DepartmentReport
+/// Enables state-level rollup to track which unit departments contributed to state aggregation
+/// </summary>
+public class StateReportDepartmentData
+{
+    public int Id { get; set; }
+    public int StateReportId { get; set; }
+    public int DepartmentReportId { get; set; }
+
+    // Track when this department was rolled into the state report
+    public DateTime AddedAt { get; set; } = DateTime.UtcNow;
+
+    // Foreign keys
+    public StateReport StateReport { get; set; } = null!;
+    public DepartmentReport DepartmentReport { get; set; } = null!;
 }

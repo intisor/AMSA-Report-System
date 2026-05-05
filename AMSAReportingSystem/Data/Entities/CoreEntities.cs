@@ -135,6 +135,9 @@ public class DepartmentReport
 
     // Foreign keys
     public Report Report { get; set; } = null!;
+
+    // Navigation properties
+    public ICollection<StateReportDepartmentData> StateReportDataLinks { get; set; } = new List<StateReportDepartmentData>();
 }
 
 /// <summary>

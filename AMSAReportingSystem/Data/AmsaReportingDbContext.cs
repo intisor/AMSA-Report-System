@@ -23,6 +23,7 @@ public class AMSAReportingDbContext : DbContext
     public DbSet<StateReportActivity> StateReportActivities { get; set; }
     public DbSet<StateReportAttachment> StateReportAttachments { get; set; }
     public DbSet<StateReportActivityLog> StateReportActivityLogs { get; set; }
+    public DbSet<StateReportDepartmentData> StateReportDepartmentData { get; set; }
 
     // Supporting entities
     public DbSet<ReportActivityLog> ReportActivityLogs { get; set; }
@@ -186,6 +187,21 @@ public class AMSAReportingDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.HasIndex(e => e.StateReportId);
             entity.Property(e => e.Action).IsRequired().HasMaxLength(100);
+        });
+
+        // ===== StateReportDepartmentData Configuration =====
+        modelBuilder.Entity<StateReportDepartmentData>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.StateReportId, e.DepartmentReportId }).IsUnique();
+            entity.HasOne(e => e.StateReport)
+                .WithMany(sr => sr.DepartmentDataLinks)
+                .HasForeignKey(e => e.StateReportId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.DepartmentReport)
+                .WithMany(dr => dr.StateReportDataLinks)
+                .HasForeignKey(e => e.DepartmentReportId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ===== ReportActivityLog Configuration =====
