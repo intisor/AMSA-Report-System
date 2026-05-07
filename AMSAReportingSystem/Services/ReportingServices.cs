@@ -967,8 +967,15 @@ public class CurrentUserReportService(
     /// Ensures current user has a draft for the given cycle, creating if necessary
     /// Use when user explicitly requests to create or edit a report
     /// </summary>
-    public Task<Report> EnsureCurrentUserDraftAsync(int cycleId, CancellationToken ct = default) =>
+    public Task<Report> CreateCurrentUserDraftAsync(int cycleId, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => _reportService.EnsureDraftAsync(actor, actor.UnitId, cycleId, ct));
+
+    /// <summary>
+    /// Backward-compatible alias for explicit draft creation.
+    /// Prefer CreateCurrentUserDraftAsync for new call sites.
+    /// </summary>
+    public Task<Report> EnsureCurrentUserDraftAsync(int cycleId, CancellationToken ct = default) =>
+        CreateCurrentUserDraftAsync(cycleId, ct);
 
     #endregion
 
@@ -1026,8 +1033,14 @@ public class CurrentUserReportService(
     public Task<List<Report>> GetMyStateReportsAsync(int? cycleId = null, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => _reportService.GetStateReportsAsync(actor, actor.StateId, cycleId, ct));
 
-    public Task<StateReport> EnsureMyStateReportAsync(int cycleId, CancellationToken ct = default) =>
+    public Task<StateReport?> GetMyStateReportAsync(int cycleId, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => _reportService.GetStateReportAsync(actor, actor.StateId, cycleId, ct));
+
+    public Task<StateReport> CreateMyStateReportAsync(int cycleId, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => _reportService.EnsureStateReportAsync(actor, actor.StateId, cycleId, ct));
+
+    public Task<StateReport> EnsureMyStateReportAsync(int cycleId, CancellationToken ct = default) =>
+        CreateMyStateReportAsync(cycleId, ct);
 
     public Task<StateReport> SaveMyStateReportAsync(int stateReportId, StateReportForm form, bool markSubmitted, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => _reportService.SaveStateReportAsync(actor, stateReportId, form, markSubmitted, ct));

@@ -74,6 +74,67 @@ public interface IAmsaApiClient
 #region API Client Implementation
 
 /// <summary>
+/// Token cache for AMSA API authentication
+/// Stores generated tokens with expiration tracking to avoid unnecessary regeneration
+/// </summary>
+public class AmsaTokenCache
+{
+    private string? _cachedToken;
+    private DateTime _tokenExpiration = DateTime.MinValue;
+    private readonly object _lockObject = new();
+
+    /// <summary>
+    /// Gets the cached token if still valid, null if expired or not set
+    /// </summary>
+    public string? GetValidToken()
+    {
+        lock (_lockObject)
+        {
+            if (!string.IsNullOrEmpty(_cachedToken) && DateTime.UtcNow < _tokenExpiration)
+            {
+                return _cachedToken;
+            }
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Sets a new token with explicit expiration time from API response
+    /// Automatically refreshes 5 minutes before expiration for safety margin
+    /// </summary>
+    public void SetToken(string token, DateTime expiresAt)
+    {
+        lock (_lockObject)
+        {
+            _cachedToken = token;
+            // Refresh 5 minutes before actual expiration for safety
+            _tokenExpiration = expiresAt.AddMinutes(-5);
+        }
+    }
+
+    /// <summary>
+    /// Overload for backward compatibility - assumes 1 hour tokens
+    /// </summary>
+    public void SetToken(string token)
+    {
+        lock (_lockObject)
+        {
+            _cachedToken = token;
+            _tokenExpiration = DateTime.UtcNow.AddMinutes(55);
+        }
+    }
+
+    public void Clear()
+    {
+        lock (_lockObject)
+        {
+            _cachedToken = null;
+            _tokenExpiration = DateTime.MinValue;
+        }
+    }
+}
+
+/// <summary>
 /// Implementation of AMSA API client using HttpClient
 /// Handles all 9 endpoint calls with error handling and logging
 /// </summary>
@@ -81,6 +142,7 @@ public class AmsaApiClient : IAmsaApiClient
 {
     private readonly HttpClient _httpClient;
     private readonly AmsaApiClientOptions _options;
+    private readonly AmsaTokenCache _tokenCache;
     private readonly ILogger<AmsaApiClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -88,30 +150,83 @@ public class AmsaApiClient : IAmsaApiClient
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AmsaApiClient(HttpClient httpClient, IOptions<AmsaApiClientOptions> options, ILogger<AmsaApiClient> logger)
+    public AmsaApiClient(HttpClient httpClient, IOptions<AmsaApiClientOptions> options, AmsaTokenCache tokenCache, ILogger<AmsaApiClient> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
+        _tokenCache = tokenCache;
         _logger = logger;
         _jsonOptions.Converters.Add(new JsonStringEnumConverter());
+    }
+
+    /// <summary>
+    /// Ensures a valid token is available in the cache or generates a new one
+    /// This is called before making authenticated requests
+    /// </summary>
+    private async Task<string?> EnsureValidTokenAsync(CancellationToken ct = default)
+    {
+        var cachedToken = _tokenCache.GetValidToken();
+        if (!string.IsNullOrEmpty(cachedToken))
+        {
+            _logger.LogDebug("Using cached AMSA API token");
+            return cachedToken;
+        }
+
+        // Generate a new token using service account credentials
+        // Use valid AMSA scopes: read:members, read:organization, read:statistics
+        var requestedScopes = new[] { "read:members", "read:organization" };
+        var tokenResult = await GenerateTokenAsync(_options.ServiceAccountMkanId.ToString(), requestedScopes, ct);
+
+        if (tokenResult.IsSuccess && !string.IsNullOrEmpty(tokenResult.Data?.Token))
+        {
+            _tokenCache.SetToken(tokenResult.Data.Token, tokenResult.Data.ExpiresAt);
+            _logger.LogInformation("Successfully generated and cached AMSA API token, expires at {ExpiresAt}", 
+                tokenResult.Data.ExpiresAt);
+            return tokenResult.Data.Token;
+        }
+
+        _logger.LogWarning("Failed to generate AMSA API token: {Error}", tokenResult.ErrorMessage);
+        return null;
+    }
+
+    /// <summary>
+    /// Adds authorization header to a request
+    /// </summary>
+    private void AddAuthorizationHeader(HttpRequestMessage request, string token)
+    {
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
     }
 
     public async Task<Result<TokenResponse>> GenerateTokenAsync(string mkanId, IEnumerable<string> requestedScopes, CancellationToken ct = default)
     {
         try
         {
-            _logger.LogInformation("Generating token for member {MkanId}", mkanId);
+            if (string.IsNullOrWhiteSpace(mkanId) || !int.TryParse(mkanId, out var mkanIdInt))
+            {
+                _logger.LogWarning("Invalid MkanId format: {MkanId}", mkanId);
+                return Result<TokenResponse>.Failure($"Invalid MKAN ID format: {mkanId}");
+            }
+
+            _logger.LogInformation("Generating token for member MKAN ID: {MkanId}", mkanIdInt);
 
             var request = new
             {
                 appId = _options.AppId,
                 appSecret = _options.AppSecret,
-                mkanId,
-                requestedScopes = requestedScopes.ToList()
+                mkanId = mkanIdInt,
+                requestedScopes = requestedScopes.ToArray()
             };
 
+            _logger.LogDebug("Sending token generation request to {Endpoint}", "/api/auth/token");
             var response = await _httpClient.PostAsJsonAsync("/api/auth/token", request, cancellationToken: ct);
-            return await HandleResponse<TokenResponse>(response, "GenerateToken");
+            var result = await HandleResponse<TokenResponse>(response, "GenerateToken");
+
+            if (result.IsSuccess)
+            {
+                _logger.LogInformation("Token generated successfully, expires at {ExpiresAt}", result.Data?.ExpiresAt);
+            }
+
+            return result;
         }
         catch (Exception ex)
         {
@@ -125,7 +240,15 @@ public class AmsaApiClient : IAmsaApiClient
         try
         {
             _logger.LogInformation("Fetching member by ID: {MemberId}", memberId);
-            var response = await _httpClient.GetAsync($"/api/members/{memberId}", cancellationToken: ct);
+            var token = await EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                return Result<MemberResponse>.Failure("Failed to obtain authentication token");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"/api/members/{memberId}");
+            AddAuthorizationHeader(request, token);
+            var response = await _httpClient.SendAsync(request, cancellationToken: ct);
             return await HandleResponse<MemberResponse>(response, "GetMemberById");
         }
         catch (Exception ex)
@@ -140,7 +263,15 @@ public class AmsaApiClient : IAmsaApiClient
         try
         {
             _logger.LogInformation("Fetching member by MKAN: {MkanId}", mkanId);
-            var response = await _httpClient.GetAsync($"/api/members/mkan/{mkanId}", cancellationToken: ct);
+            var token = await EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                return Result<MemberResponse>.Failure("Failed to obtain authentication token");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"/api/members/mkan/{mkanId}");
+            AddAuthorizationHeader(request, token);
+            var response = await _httpClient.SendAsync(request, cancellationToken: ct);
             return await HandleResponse<MemberResponse>(response, "GetMemberByMkan");
         }
         catch (Exception ex)
@@ -155,7 +286,15 @@ public class AmsaApiClient : IAmsaApiClient
         try
         {
             _logger.LogInformation("Fetching all states");
-            var response = await _httpClient.GetAsync("/api/states", cancellationToken: ct);
+            var token = await EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                return Result<List<StateResponse>>.Failure("Failed to obtain authentication token");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, "/api/states");
+            AddAuthorizationHeader(request, token);
+            var response = await _httpClient.SendAsync(request, cancellationToken: ct);
             return await HandleResponse<List<StateResponse>>(response, "GetAllStates");
         }
         catch (Exception ex)
@@ -170,7 +309,15 @@ public class AmsaApiClient : IAmsaApiClient
         try
         {
             _logger.LogInformation("Fetching state by ID: {StateId}", stateId);
-            var response = await _httpClient.GetAsync($"/api/states/{stateId}", cancellationToken: ct);
+            var token = await EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                return Result<StateResponse>.Failure("Failed to obtain authentication token");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"/api/states/{stateId}");
+            AddAuthorizationHeader(request, token);
+            var response = await _httpClient.SendAsync(request, cancellationToken: ct);
             return await HandleResponse<StateResponse>(response, "GetStateById");
         }
         catch (Exception ex)
@@ -185,7 +332,15 @@ public class AmsaApiClient : IAmsaApiClient
         try
         {
             _logger.LogInformation("Fetching units for state: {StateId}", stateId);
-            var response = await _httpClient.GetAsync($"/api/units/state/{stateId}", cancellationToken: ct);
+            var token = await EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                return Result<List<UnitResponse>>.Failure("Failed to obtain authentication token");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"/api/units/state/{stateId}");
+            AddAuthorizationHeader(request, token);
+            var response = await _httpClient.SendAsync(request, cancellationToken: ct);
             return await HandleResponse<List<UnitResponse>>(response, "GetUnitsByState");
         }
         catch (Exception ex)
@@ -200,7 +355,15 @@ public class AmsaApiClient : IAmsaApiClient
         try
         {
             _logger.LogInformation("Fetching unit by ID: {UnitId}", unitId);
-            var response = await _httpClient.GetAsync($"/api/units/{unitId}", cancellationToken: ct);
+            var token = await EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                return Result<UnitResponse>.Failure("Failed to obtain authentication token");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"/api/units/{unitId}");
+            AddAuthorizationHeader(request, token);
+            var response = await _httpClient.SendAsync(request, cancellationToken: ct);
             return await HandleResponse<UnitResponse>(response, "GetUnitById");
         }
         catch (Exception ex)
@@ -215,7 +378,20 @@ public class AmsaApiClient : IAmsaApiClient
         try
         {
             _logger.LogInformation("Creating app registration: {AppId}", request.AppId);
-            var response = await _httpClient.PostAsJsonAsync("/api/auth/apps", request, cancellationToken: ct);
+            var token = await EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                return Result<AppRegistrationResponse>.Failure("Failed to obtain authentication token");
+            }
+
+            var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/api/auth/apps");
+            AddAuthorizationHeader(httpRequest, token);
+            var content = new StringContent(
+                System.Text.Json.JsonSerializer.Serialize(request, _jsonOptions),
+                System.Text.Encoding.UTF8,
+                "application/json");
+            httpRequest.Content = content;
+            var response = await _httpClient.SendAsync(httpRequest, cancellationToken: ct);
             return await HandleResponse<AppRegistrationResponse>(response, "CreateApp");
         }
         catch (Exception ex)
@@ -230,7 +406,15 @@ public class AmsaApiClient : IAmsaApiClient
         try
         {
             _logger.LogInformation("Fetching app registration: {AppId}", appId);
-            var response = await _httpClient.GetAsync($"/api/auth/apps/{appId}", cancellationToken: ct);
+            var token = await EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                return Result<AppRegistrationResponse>.Failure("Failed to obtain authentication token");
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, $"/api/auth/apps/{appId}");
+            AddAuthorizationHeader(request, token);
+            var response = await _httpClient.SendAsync(request, cancellationToken: ct);
             return await HandleResponse<AppRegistrationResponse>(response, "GetApp");
         }
         catch (Exception ex)
@@ -282,7 +466,7 @@ public class AmsaApiClientOptions
     public const string SectionName = "AMSAApi";
 
     /// <summary>
-    /// Base URL of the AMSA API (
+    /// Base URL of the AMSA API
     /// </summary>
     public required string BaseUrl { get; set; }
 
@@ -295,6 +479,12 @@ public class AmsaApiClientOptions
     /// Application secret for authentication (stored securely in User Secrets for dev)
     /// </summary>
     public required string AppSecret { get; set; }
+
+    /// <summary>
+    /// Service account MKAN ID used for token generation when no specific member context
+    /// This account must exist in the AMSA API database
+    /// </summary>
+    public int ServiceAccountMkanId { get; set; } = 1;
 
     /// <summary>
     /// HTTP request timeout in seconds (default: 300)
@@ -393,8 +583,47 @@ public class Result<T>
 /// </summary>
 public class TokenResponse
 {
+    [System.Text.Json.Serialization.JsonPropertyName("token")]
     public string Token { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("tokenType")]
     public string TokenType { get; set; } = "Bearer";
+
+    [System.Text.Json.Serialization.JsonPropertyName("expiresAt")]
+    public DateTime ExpiresAt { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("member")]
+    public MemberTokenInfo? Member { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("scopes")]
+    public string[]? Scopes { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("roles")]
+    public string[]? Roles { get; set; }
+}
+
+/// <summary>
+/// Member information included in token response
+/// </summary>
+public class MemberTokenInfo
+{
+    [System.Text.Json.Serialization.JsonPropertyName("memberId")]
+    public int MemberId { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("mkanId")]
+    public int MkanId { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("firstName")]
+    public string FirstName { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("lastName")]
+    public string LastName { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("email")]
+    public string Email { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("unitId")]
+    public int UnitId { get; set; }
 }
 
 /// <summary>

@@ -620,7 +620,7 @@
 
         try
         {
-            CurrentReport = await CurrentUserReportService.EnsureCurrentUserDraftAsync(CurrentCycle.Id);
+            CurrentReport = await CurrentUserReportService.CreateCurrentUserDraftAsync(CurrentCycle.Id);
             CurrentState = DashboardState.DraftExists;
             TotalDepartments = CurrentReport.DepartmentReports.Count == 0 ? 9 : CurrentReport.DepartmentReports.Count;
             SubmittedDepartments = 0;

@@ -277,7 +277,21 @@
             DeadlineLabel = cycle.SubmissionDeadline.ToString("MMMM d, yyyy");
             IsCycleLocked = cycle.IsLocked || DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
 
-            var report = await CurrentUserReportService.EnsureCurrentUserDraftAsync(cycle.Id);
+            var report = await CurrentUserReportService.GetCurrentUserDraftAsync(cycle.Id);
+            if (report is null)
+            {
+                SetMessage("No draft report exists for the current cycle. Return to the dashboard and click Create Report first.", false);
+                Nav.NavigateTo("/dashboard", replace: true);
+                return;
+            }
+
+            if (report.Status is not ReportStatus.Draft and not ReportStatus.RejectedByPresident and not ReportStatus.RejectedByState)
+            {
+                SetMessage("This report is read-only after submission. Use the dashboard to review its status.", false);
+                Nav.NavigateTo("/dashboard", replace: true);
+                return;
+            }
+
             _reportId = report.Id;
 
             var departmentReport = await CurrentUserReportService.GetDepartmentAsync(_reportId, _department);

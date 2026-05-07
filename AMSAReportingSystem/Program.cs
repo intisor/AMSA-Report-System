@@ -22,6 +22,9 @@ builder.Services.AddDbContext<AMSAReportingDbContext>(options =>
 builder.Services.Configure<AmsaApiClientOptions>(
 	builder.Configuration.GetSection(AmsaApiClientOptions.SectionName));
 
+// Add token cache singleton for AMSA API authentication
+builder.Services.AddSingleton<AmsaTokenCache>();
+
 // Add typed HttpClient for AMSA API
 builder.Services.AddHttpClient<IAmsaApiClient, AmsaApiClient>((serviceProvider, client) =>
 	{
