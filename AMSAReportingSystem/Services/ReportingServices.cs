@@ -287,7 +287,7 @@ public class UnifiedReportService(
         var unit = await EnsureUnitExistsAsync(amsaUnitId, ct);
         if (unit is null)
         {
-            throw new InvalidOperationException($"Unit with AMSA ID {amsaUnitId} could not be found locally or from AMSA API.");
+            unit = await CreateUnitFromAuthContextAsync(actor, ct);
         }
 
         if (!_access.CanInitiateReportSubmission(actor, unit.Id, unit.StateId))
@@ -312,8 +312,11 @@ public class UnifiedReportService(
             return existing;
         }
 
-        var unit = await EnsureUnitExistsAsync(amsaUnitId, ct)
-            ?? throw new InvalidOperationException($"Unit with AMSA ID {amsaUnitId} could not be found locally or from AMSA API.");
+        var unit = await EnsureUnitExistsAsync(amsaUnitId, ct);
+        if (unit is null)
+        {
+            unit = await CreateUnitFromAuthContextAsync(actor, ct);
+        }
 
         var report = new Report
         {
@@ -672,50 +675,46 @@ public class UnifiedReportService(
     #region Reporting Cycle Management
 
     /// <summary>
-    /// Retrieves active reporting cycle
-    /// Falls back to most recent unlocked cycle if no active cycle found
+    /// Retrieves the cycle for the current calendar month (deterministic, no grace days)
+    /// Returns null if not found (should not happen if EnsureActiveCycleAsync was called)
     /// </summary>
     public async Task<ReportingCycle?> GetActiveCycleAsync(CancellationToken ct = default)
     {
         var today = DateTime.UtcNow.Date;
-
-        var active = await _db.ReportingCycles
-            .Where(c => !c.IsLocked && c.StartDate.Date <= today && c.EndDate.Date >= today)
-            .OrderByDescending(c => c.StartDate)
-            .FirstOrDefaultAsync(ct);
-
-        if (active is not null)
-        {
-            return active;
-        }
+        var monthStart = new DateTime(today.Year, today.Month, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
 
         return await _db.ReportingCycles
-            .Where(c => !c.IsLocked)
-            .OrderByDescending(c => c.StartDate)
+            .Where(c => c.StartDate.Date == monthStart && c.EndDate.Date == monthEnd)
             .FirstOrDefaultAsync(ct);
     }
 
     /// <summary>
-    /// Ensures active cycle exists, creating if necessary
+    /// Ensures the current month's cycle exists, creating if necessary.
+    /// Deterministic: one cycle per calendar month, deadline = last day of month.
+    /// Safe to call repeatedly; idempotent.
     /// </summary>
     public async Task<ReportingCycle> EnsureActiveCycleAsync(CancellationToken ct = default)
     {
-        var existing = await GetActiveCycleAsync(ct);
+        var today = DateTime.UtcNow.Date;
+        var monthStart = new DateTime(today.Year, today.Month, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+
+        var existing = await _db.ReportingCycles
+            .Where(c => c.StartDate.Date == monthStart && c.EndDate.Date == monthEnd)
+            .FirstOrDefaultAsync(ct);
+
         if (existing is not null)
         {
             return existing;
         }
 
-        var today = DateTime.UtcNow.Date;
-        var start = new DateTime(today.Year, today.Month, 1);
-        var end = start.AddMonths(1).AddDays(-1);
-
         var cycle = new ReportingCycle
         {
-            CycleMonth = start.ToString("MMMM yyyy"),
-            StartDate = start,
-            EndDate = end,
-            SubmissionDeadline = end.AddDays(DefaultSubmissionGraceDays),
+            CycleMonth = monthStart.ToString("MMMM yyyy"),
+            StartDate = monthStart,
+            EndDate = monthEnd,
+            SubmissionDeadline = monthEnd,
             IsLocked = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -854,6 +853,43 @@ public class UnifiedReportService(
     }
 
     /// <summary>
+    /// Fallback method to create unit from AuthContext when AMSA API sync fails.
+    /// Used when a user is authenticated but their unit hasn't been synced from the API.
+    /// </summary>
+    private async Task<Unit> CreateUnitFromAuthContextAsync(AuthContext actor, CancellationToken ct)
+    {
+        var state = await _db.States.FirstOrDefaultAsync(s => s.Id == actor.StateId, ct);
+        if (state is null)
+        {
+            state = new State
+            {
+                Id = actor.StateId,
+                Name = actor.StateName,
+                Abbreviation = actor.StateName.Length >= 3 ? actor.StateName[..3].ToUpperInvariant() : actor.StateName.ToUpperInvariant(),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _db.States.Add(state);
+        }
+
+        var unit = new Unit
+        {
+            Name = actor.UnitName,
+            StateId = actor.StateId,
+            AmsaDbUnitId = actor.UnitId,
+            PresidentName = "Unknown",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _db.Units.Add(unit);
+        await _db.SaveChangesAsync(ct);
+        _logger.LogInformation("Created unit {UnitId} ({UnitName}) from AuthContext", actor.UnitId, actor.UnitName);
+        return unit;
+    }
+
+    /// <summary>
     /// Links all submitted department reports from units in a state to the state report
     /// Used for rollup aggregation and audit trail
     /// </summary>
@@ -920,6 +956,17 @@ public class CurrentUserReportService(
     public Task<ReportingCycle> EnsureActiveCycleAsync(CancellationToken ct = default) =>
         _reportService.EnsureActiveCycleAsync(ct);
 
+    /// <summary>
+    /// Query-only method: retrieves the current user's draft for a cycle without creating one
+    /// Returns null if no draft exists
+    /// </summary>
+    public Task<Report?> GetCurrentUserDraftAsync(int cycleId, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => _reportService.GetDraftAsync(actor, actor.UnitId, cycleId, ct));
+
+    /// <summary>
+    /// Ensures current user has a draft for the given cycle, creating if necessary
+    /// Use when user explicitly requests to create or edit a report
+    /// </summary>
     public Task<Report> EnsureCurrentUserDraftAsync(int cycleId, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => _reportService.EnsureDraftAsync(actor, actor.UnitId, cycleId, ct));
 
