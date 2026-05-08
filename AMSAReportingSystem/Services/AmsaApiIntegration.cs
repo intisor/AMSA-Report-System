@@ -143,6 +143,7 @@ public class AmsaApiClient : IAmsaApiClient
     private readonly HttpClient _httpClient;
     private readonly AmsaApiClientOptions _options;
     private readonly AmsaTokenCache _tokenCache;
+    private readonly AuthContext _auth;
     private readonly ILogger<AmsaApiClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -150,11 +151,12 @@ public class AmsaApiClient : IAmsaApiClient
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AmsaApiClient(HttpClient httpClient, IOptions<AmsaApiClientOptions> options, AmsaTokenCache tokenCache, ILogger<AmsaApiClient> logger)
+    public AmsaApiClient(HttpClient httpClient, IOptions<AmsaApiClientOptions> options, AuthContext Auth, AmsaTokenCache tokenCache, ILogger<AmsaApiClient> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _tokenCache = tokenCache;
+        _auth = Auth;
         _logger = logger;
         _jsonOptions.Converters.Add(new JsonStringEnumConverter());
     }
@@ -175,7 +177,7 @@ public class AmsaApiClient : IAmsaApiClient
         // Generate a new token using service account credentials
         // Use valid AMSA scopes: read:members, read:organization, read:statistics
         var requestedScopes = new[] { "read:members", "read:organization" };
-        var tokenResult = await GenerateTokenAsync(_options.ServiceAccountMkanId.ToString(), requestedScopes, ct);
+        var tokenResult = await GenerateTokenAsync(_auth.MkanId.ToString(), requestedScopes, ct);
 
         if (tokenResult.IsSuccess && !string.IsNullOrEmpty(tokenResult.Data?.Token))
         {
