@@ -35,7 +35,7 @@ builder.Services.AddHttpClient<IAmsaApiClient, AmsaApiClient>((serviceProvider, 
 
 // Add authentication services
 // Authentication services
-builder.Services.AddScoped<AuthContext>();
+
 builder.Services.AddScoped<AmsaAuthService>();
 builder.Services.AddScoped<AMSAAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => sp.GetRequiredService<AMSAAuthStateProvider>());

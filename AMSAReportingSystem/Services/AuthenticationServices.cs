@@ -17,13 +17,15 @@ public class AmsaAuthService
 {
     private readonly IAmsaApiClient _apiClient;
     private readonly ILogger<AmsaAuthService> _logger;
+    private AmsaTokenCache _tokenCache;
     private string? _cachedToken;
     private DateTime _tokenExpiry;
 
-    public AmsaAuthService(IAmsaApiClient apiClient, ILogger<AmsaAuthService> logger)
+    public AmsaAuthService(IAmsaApiClient apiClient, ILogger<AmsaAuthService> logger, AmsaTokenCache tokenCache)
     {
         _apiClient = apiClient;
         _logger = logger;
+        _tokenCache = tokenCache;
         _tokenExpiry = DateTime.UtcNow;
     }
 
@@ -46,6 +48,8 @@ public class AmsaAuthService
                 _logger.LogWarning("Token generation failed for member {MkanId}: {Error}", mkanId, tokenResult.ErrorMessage);
                 return null;
             }
+
+            _tokenCache.SetMkanId(mkanId);
 
             // Get member details from AMSA API
             var memberResult = await _apiClient.GetMemberByMkanAsync(mkanId, ct);

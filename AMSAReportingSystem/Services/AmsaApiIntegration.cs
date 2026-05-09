@@ -81,6 +81,7 @@ public class AmsaTokenCache
 {
     private string? _cachedToken;
     private DateTime _tokenExpiration = DateTime.MinValue;
+    private string? _mkanId;
     private readonly object _lockObject = new();
 
     /// <summary>
@@ -98,17 +99,28 @@ public class AmsaTokenCache
         }
     }
 
+    public void SetMkanId(string mkanId)
+    {
+        lock (_lockObject) { _mkanId = mkanId; }
+    }
+
+    public string? GetMkanId()
+    {
+        lock (_lockObject) { return _mkanId; }
+    }
+
     /// <summary>
     /// Sets a new token with explicit expiration time from API response
     /// Automatically refreshes 5 minutes before expiration for safety margin
     /// </summary>
-    public void SetToken(string token, DateTime expiresAt)
+    public void SetToken(string token, DateTime expiresAt, string mkanId)
     {
         lock (_lockObject)
         {
             _cachedToken = token;
+            _mkanId = mkanId;
             // Refresh 5 minutes before actual expiration for safety
-            _tokenExpiration = expiresAt.AddMinutes(-5);
+            _tokenExpiration = expiresAt.AddMinutes(5);
         }
     }
 
@@ -143,7 +155,6 @@ public class AmsaApiClient : IAmsaApiClient
     private readonly HttpClient _httpClient;
     private readonly AmsaApiClientOptions _options;
     private readonly AmsaTokenCache _tokenCache;
-    private readonly AuthContext _auth;
     private readonly ILogger<AmsaApiClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -151,12 +162,12 @@ public class AmsaApiClient : IAmsaApiClient
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
-    public AmsaApiClient(HttpClient httpClient, IOptions<AmsaApiClientOptions> options, AuthContext Auth, AmsaTokenCache tokenCache, ILogger<AmsaApiClient> logger)
+    public AmsaApiClient(HttpClient httpClient, IOptions<AmsaApiClientOptions> options, AmsaTokenCache tokenCache, ILogger<AmsaApiClient> logger)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _tokenCache = tokenCache;
-        _auth = Auth;
+     
         _logger = logger;
         _jsonOptions.Converters.Add(new JsonStringEnumConverter());
     }
@@ -177,11 +188,12 @@ public class AmsaApiClient : IAmsaApiClient
         // Generate a new token using service account credentials
         // Use valid AMSA scopes: read:members, read:organization, read:statistics
         var requestedScopes = new[] { "read:members", "read:organization" };
-        var tokenResult = await GenerateTokenAsync(_auth.MkanId.ToString(), requestedScopes, ct);
+        var mkanId = _tokenCache.GetMkanId() ?? throw  new InvalidOperationException("MKAN ID must be set in token cache before generating token");
+        var tokenResult = await GenerateTokenAsync(mkanId, requestedScopes, ct);
 
         if (tokenResult.IsSuccess && !string.IsNullOrEmpty(tokenResult.Data?.Token))
         {
-            _tokenCache.SetToken(tokenResult.Data.Token, tokenResult.Data.ExpiresAt);
+            _tokenCache.SetToken(tokenResult.Data.Token, tokenResult.Data.ExpiresAt,mkanId);
             _logger.LogInformation("Successfully generated and cached AMSA API token, expires at {ExpiresAt}", 
                 tokenResult.Data.ExpiresAt);
             return tokenResult.Data.Token;
