@@ -22,49 +22,13 @@ public class ReportingCycle
 }
 
 /// <summary>
-/// Represents a Nigerian state
-/// </summary>
-public class State
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty; // "Kwara", "Lagos", etc.
-    public string Abbreviation { get; set; } = string.Empty; // "KWR", "LGS", etc.
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-    // Navigation properties
-    public ICollection<Unit> Units { get; set; } = new List<Unit>();
-    public ICollection<StateReport> StateReports { get; set; } = new List<StateReport>();
-}
-
-/// <summary>
-/// Represents an AMSA unit (local mosque/center)
-/// </summary>
-public class Unit
-{
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty; // "Ilorin Unit", "Lagos Unit", etc.
-    public int StateId { get; set; }
-    public int AmsaDbUnitId { get; set; } // Reference to external AmsaDB
-    public string PresidentName { get; set; } = string.Empty;
-    public bool IsActive { get; set; } = true;
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-    // Foreign keys
-    public State State { get; set; } = null!;
-
-    // Navigation properties
-    public ICollection<Report> Reports { get; set; } = new List<Report>();
-}
-
-/// <summary>
 /// Represents a unit's monthly report (encompasses all 9 departments)
 /// </summary>
 public class Report
 {
     public int Id { get; set; }
     public int UnitId { get; set; }
+    public int StateId { get; set; }
     public int CycleId { get; set; }
     public ReportStatus Status { get; set; } = ReportStatus.Draft;
     public bool IsCompliant { get; set; }
@@ -92,7 +56,6 @@ public class Report
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Foreign keys
-    public Unit Unit { get; set; } = null!;
     public ReportingCycle Cycle { get; set; } = null!;
 
     // Navigation properties

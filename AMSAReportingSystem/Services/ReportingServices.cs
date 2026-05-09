@@ -44,9 +44,7 @@ public class UnifiedReportService(
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
 
-        var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
-
-        if (!_access.CanEditDepartment(actor, unit.Id, unit.StateId, department))
+        if (!_access.CanEditDepartment(actor, report.UnitId, report.StateId, department))
         {
             throw new UnauthorizedAccessException("You are not allowed to edit this department report.");
         }
@@ -272,7 +270,6 @@ public class UnifiedReportService(
     public async Task<Report?> GetReportAsync(int reportId, CancellationToken ct = default)
     {
         return await _db.Reports
-            .Include(r => r.Unit)
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
             .Include(r => r.ActivityLogs)
@@ -284,13 +281,7 @@ public class UnifiedReportService(
     /// </summary>
     public async Task<Report?> GetDraftAsync(AuthContext actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
     {
-        var unit = await EnsureUnitExistsAsync(amsaUnitId, ct);
-        if (unit is null)
-        {
-            unit = await CreateUnitFromAuthContextAsync(actor, ct);
-        }
-
-        if (!_access.CanInitiateReportSubmission(actor, unit.Id, unit.StateId))
+        if (!_access.CanInitiateReportSubmission(actor, amsaUnitId, actor.StateId))
         {
             throw new UnauthorizedAccessException("You are not allowed to create or manage reports for this unit.");
         }
@@ -298,7 +289,7 @@ public class UnifiedReportService(
         return await _db.Reports
             .Include(r => r.DepartmentReports)
             .Include(r => r.ActivityLogs)
-            .FirstOrDefaultAsync(r => r.UnitId == unit.Id && r.CycleId == cycleId, ct);
+            .FirstOrDefaultAsync(r => r.UnitId == amsaUnitId && r.CycleId == cycleId, ct);
     }
 
     /// <summary>
@@ -312,15 +303,10 @@ public class UnifiedReportService(
             return existing;
         }
 
-        var unit = await EnsureUnitExistsAsync(amsaUnitId, ct);
-        if (unit is null)
-        {
-            unit = await CreateUnitFromAuthContextAsync(actor, ct);
-        }
-
         var report = new Report
         {
-            UnitId = unit.Id,
+            UnitId = amsaUnitId,
+            StateId = actor.StateId,
             CycleId = cycleId,
             Status = ReportStatus.Draft,
             IsCompliant = false,
@@ -363,10 +349,7 @@ public class UnifiedReportService(
     /// </summary>
     public async Task<List<Report>> GetUnitReportsAsync(AuthContext actor, int unitId, int? cycleId = null, CancellationToken ct = default)
     {
-        var unit = await _db.Units.FirstOrDefaultAsync(u => u.Id == unitId, ct)
-            ?? throw new InvalidOperationException($"Unit {unitId} not found.");
-
-        if (!_access.CanReviewAtUnitLevel(actor, unit.Id))
+        if (!_access.CanReviewAtUnitLevel(actor, unitId))
         {
             throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
         }
@@ -378,7 +361,6 @@ public class UnifiedReportService(
         }
 
         return await _db.Reports
-            .Include(r => r.Unit)
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
             .Where(r => r.UnitId == unitId && r.CycleId == selectedCycleId.Value)
@@ -403,11 +385,10 @@ public class UnifiedReportService(
         }
 
         return await _db.Reports
-            .Include(r => r.Unit)
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
-            .Where(r => r.CycleId == selectedCycleId.Value && r.Unit.StateId == stateId)
-            .OrderBy(r => r.Unit.Name)
+            .Where(r => r.CycleId == selectedCycleId.Value && r.StateId == stateId)
+            .OrderBy(r => r.UpdatedAt)
             .ToListAsync(ct);
     }
 
@@ -429,13 +410,11 @@ public class UnifiedReportService(
         }
 
         return await _db.Reports
-            .Include(r => r.Unit)
-                .ThenInclude(u => u.State)
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
             .Where(r => r.CycleId == selectedCycleId.Value)
-            .OrderBy(r => r.Unit.State.Name)
-            .ThenBy(r => r.Unit.Name)
+            .OrderBy(r => r.StateId)
+            .ThenBy(r => r.UnitId)
             .ToListAsync(ct);
     }
 
@@ -451,8 +430,7 @@ public class UnifiedReportService(
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
         await EnsureCycleOpenForEditsAsync(report.CycleId, ct);
 
-        var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
-        if (!_access.CanInitiateReportSubmission(actor, unit.Id, unit.StateId))
+        if (!_access.CanInitiateReportSubmission(actor, report.UnitId, report.StateId))
         {
             throw new UnauthorizedAccessException("You are not allowed to submit this report.");
         }
@@ -492,9 +470,7 @@ public class UnifiedReportService(
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
-        var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
-
-        if (!_access.CanReviewAtUnitLevel(actor, unit.Id))
+        if (!_access.CanReviewAtUnitLevel(actor, report.UnitId))
         {
             throw new UnauthorizedAccessException("You are not allowed to approve this report.");
         }
@@ -530,9 +506,7 @@ public class UnifiedReportService(
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
-        var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
-
-        if (!_access.CanReviewAtUnitLevel(actor, unit.Id))
+        if (!_access.CanReviewAtUnitLevel(actor, report.UnitId))
         {
             throw new UnauthorizedAccessException("You are not allowed to reject this report.");
         }
@@ -566,9 +540,7 @@ public class UnifiedReportService(
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
-        var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
-
-        if (!_access.CanReviewAtStateLevel(actor, unit.StateId))
+        if (!_access.CanReviewAtStateLevel(actor, report.StateId))
         {
             throw new UnauthorizedAccessException("You are not allowed to approve this report at state level.");
         }
@@ -604,9 +576,7 @@ public class UnifiedReportService(
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
-        var unit = await _db.Units.FirstAsync(u => u.Id == report.UnitId, ct);
-
-        if (!_access.CanReviewAtStateLevel(actor, unit.StateId))
+        if (!_access.CanReviewAtStateLevel(actor, report.StateId))
         {
             throw new UnauthorizedAccessException("You are not allowed to reject this report at state level.");
         }
@@ -806,108 +776,16 @@ public class UnifiedReportService(
         return cycle?.Id;
     }
 
-    private async Task<Unit?> EnsureUnitExistsAsync(int amsaUnitId, CancellationToken ct)
-    {
-        var existing = await _db.Units.FirstOrDefaultAsync(u => u.AmsaDbUnitId == amsaUnitId, ct);
-        if (existing is not null)
-        {
-            return existing;
-        }
-
-        var apiUnit = await _amSaApiClient.GetUnitByIdAsync(amsaUnitId, ct);
-        if (!apiUnit.IsSuccess || apiUnit.Data is null)
-        {
-            _logger.LogWarning("Could not sync unit {AmsaUnitId} from AMSA API: {Error}", amsaUnitId, apiUnit.ErrorMessage);
-            return null;
-        }
-
-        var unitData = apiUnit.Data;
-        var state = await _db.States.FirstOrDefaultAsync(s => s.Id == unitData.StateId, ct);
-        if (state is null)
-        {
-            state = new State
-            {
-                Id = unitData.StateId,
-                Name = unitData.StateName,
-                Abbreviation = unitData.StateName.Length >= 3 ? unitData.StateName[..3].ToUpperInvariant() : unitData.StateName.ToUpperInvariant(),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            _db.States.Add(state);
-        }
-
-        var unit = new Unit
-        {
-            Name = unitData.UnitName,
-            StateId = unitData.StateId,
-            AmsaDbUnitId = unitData.UnitId,
-            PresidentName = "Unknown",
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        _db.Units.Add(unit);
-        await _db.SaveChangesAsync(ct);
-        return unit;
-    }
-
-    /// <summary>
-    /// Fallback method to create unit from AuthContext when AMSA API sync fails.
-    /// Used when a user is authenticated but their unit hasn't been synced from the API.
-    /// </summary>
-    private async Task<Unit> CreateUnitFromAuthContextAsync(AuthContext actor, CancellationToken ct)
-    {
-        var state = await _db.States.FirstOrDefaultAsync(s => s.Id == actor.StateId, ct);
-        if (state is null)
-        {
-            state = new State
-            {
-                Id = actor.StateId,
-                Name = actor.StateName,
-                Abbreviation = actor.StateName.Length >= 3 ? actor.StateName[..3].ToUpperInvariant() : actor.StateName.ToUpperInvariant(),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            _db.States.Add(state);
-        }
-
-        var unit = new Unit
-        {
-            Name = actor.UnitName,
-            StateId = actor.StateId,
-            AmsaDbUnitId = actor.UnitId,
-            PresidentName = "Unknown",
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
-
-        _db.Units.Add(unit);
-        await _db.SaveChangesAsync(ct);
-        _logger.LogInformation("Created unit {UnitId} ({UnitName}) from AuthContext", actor.UnitId, actor.UnitName);
-        return unit;
-    }
-
     /// <summary>
     /// Links all submitted department reports from units in a state to the state report
     /// Used for rollup aggregation and audit trail
     /// </summary>
     private async Task LinkDepartmentReportsToStateReportAsync(StateReport stateReport, CancellationToken ct)
     {
-        // Get all units in this state
-        var unitIds = await _db.Units
-            .Where(u => u.StateId == stateReport.StateId)
-            .Select(u => u.Id)
-            .ToListAsync(ct);
-
-        if (unitIds.Count == 0)
-            return;
-
-        // Get all submitted department reports for these units in this cycle
+        // Get all submitted department reports for reports in this state + cycle
         var submittedDepartmentReports = await _db.DepartmentReports
             .Where(dr => _db.Reports
-                .Where(r => r.CycleId == stateReport.CycleId && unitIds.Contains(r.UnitId))
+                .Where(r => r.CycleId == stateReport.CycleId && r.StateId == stateReport.StateId)
                 .Select(r => r.Id)
                 .Contains(dr.ReportId) && dr.IsSubmitted)
             .ToListAsync(ct);

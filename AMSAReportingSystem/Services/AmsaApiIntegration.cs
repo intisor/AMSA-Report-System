@@ -79,6 +79,7 @@ public interface IAmsaApiClient
 /// </summary>
 public class AmsaTokenCache
 {
+    private static readonly TimeSpan RefreshSkew = TimeSpan.FromMinutes(5);
     private string? _cachedToken;
     private DateTime _tokenExpiration = DateTime.MinValue;
     private string? _mkanId;
@@ -111,7 +112,7 @@ public class AmsaTokenCache
 
     /// <summary>
     /// Sets a new token with explicit expiration time from API response
-    /// Automatically refreshes 5 minutes before expiration for safety margin
+    /// Automatically refreshes before expiration for safety margin
     /// </summary>
     public void SetToken(string token, DateTime expiresAt, string mkanId)
     {
@@ -119,8 +120,7 @@ public class AmsaTokenCache
         {
             _cachedToken = token;
             _mkanId = mkanId;
-            // Refresh 5 minutes before actual expiration for safety
-            _tokenExpiration = expiresAt.AddMinutes(5);
+            _tokenExpiration = CalculateEffectiveExpiration(expiresAt);
         }
     }
 
@@ -132,7 +132,7 @@ public class AmsaTokenCache
         lock (_lockObject)
         {
             _cachedToken = token;
-            _tokenExpiration = DateTime.UtcNow.AddMinutes(55);
+            _tokenExpiration = CalculateEffectiveExpiration(DateTime.UtcNow.AddHours(1));
         }
     }
 
@@ -143,6 +143,24 @@ public class AmsaTokenCache
             _cachedToken = null;
             _tokenExpiration = DateTime.MinValue;
         }
+    }
+
+    /// <summary>
+    /// Converts the API expiration into the local cutoff used by the cache and auth state.
+    /// The returned instant is normalized to UTC and pulled slightly earlier so the app
+    /// refreshes the token before the server considers it expired.
+    /// </summary>
+    public static DateTime CalculateEffectiveExpiration(DateTime expiresAt)
+    {
+        var expiresAtUtc = expiresAt.Kind switch
+        {
+            DateTimeKind.Utc => expiresAt,
+            DateTimeKind.Local => expiresAt.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)
+        };
+
+        var effectiveExpiration = expiresAtUtc - RefreshSkew;
+        return effectiveExpiration > DateTime.UtcNow ? effectiveExpiration : DateTime.UtcNow;
     }
 }
 
@@ -193,7 +211,7 @@ public class AmsaApiClient : IAmsaApiClient
 
         if (tokenResult.IsSuccess && !string.IsNullOrEmpty(tokenResult.Data?.Token))
         {
-            _tokenCache.SetToken(tokenResult.Data.Token, tokenResult.Data.ExpiresAt,mkanId);
+            _tokenCache.SetToken(tokenResult.Data.Token, tokenResult.Data.ExpiresAt ?? DateTime.UtcNow.AddHours(1), mkanId);
             _logger.LogInformation("Successfully generated and cached AMSA API token, expires at {ExpiresAt}", 
                 tokenResult.Data.ExpiresAt);
             return tokenResult.Data.Token;
@@ -449,6 +467,21 @@ public class AmsaApiClient : IAmsaApiClient
             {
                 var json = await response.Content.ReadAsStringAsync();
                 var data = JsonSerializer.Deserialize<T>(json, _jsonOptions);
+
+                if (data is TokenResponse tokenResponse && tokenResponse.ExpiresAt == default)
+                {
+                    if (TryGetJwtExpiration(tokenResponse.Token, out var jwtExpiresAt))
+                    {
+                        tokenResponse.ExpiresAt = jwtExpiresAt;
+                        _logger.LogDebug("Derived token expiry from JWT exp claim: {ExpiresAt}", jwtExpiresAt);
+                    }
+                    else
+                    {
+                        tokenResponse.ExpiresAt = DateTime.UtcNow.AddHours(1);
+                        _logger.LogWarning("Token response did not include expiresAt and JWT exp could not be parsed; defaulting expiry to 1 hour from now");
+                    }
+                }
+
                 _logger.LogInformation("Operation {OperationName} completed successfully", operationName);
                 return Result<T>.Success(data!);
             }
@@ -464,6 +497,76 @@ public class AmsaApiClient : IAmsaApiClient
             _logger.LogError(ex, "Error processing response for operation {OperationName}", operationName);
             return Result<T>.Failure($"Failed to process response: {ex.Message}");
         }
+    }
+
+    private static bool TryGetJwtExpiration(string token, out DateTime expiresAt)
+    {
+        expiresAt = default;
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return false;
+        }
+
+        var parts = token.Split('.');
+        if (parts.Length < 2)
+        {
+            return false;
+        }
+
+        try
+        {
+            var payloadBytes = Base64UrlDecode(parts[1]);
+            using var payloadJson = JsonDocument.Parse(payloadBytes);
+
+            if (!payloadJson.RootElement.TryGetProperty("exp", out var expElement))
+            {
+                return false;
+            }
+
+            long expSeconds;
+            switch (expElement.ValueKind)
+            {
+                case JsonValueKind.Number when expElement.TryGetInt64(out expSeconds):
+                    break;
+                case JsonValueKind.String when long.TryParse(expElement.GetString(), out expSeconds):
+                    break;
+                default:
+                    return false;
+            }
+
+            if (expSeconds <= 0)
+            {
+                return false;
+            }
+
+            expiresAt = DateTimeOffset.FromUnixTimeSeconds(expSeconds).UtcDateTime;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static byte[] Base64UrlDecode(string input)
+    {
+        var base64 = input.Replace('-', '+').Replace('_', '/');
+
+        switch (base64.Length % 4)
+        {
+            case 2:
+                base64 += "==";
+                break;
+            case 3:
+                base64 += "=";
+                break;
+            case 1:
+                base64 += "===";
+                break;
+        }
+
+        return Convert.FromBase64String(base64);
     }
 }
 
@@ -600,11 +703,10 @@ public class TokenResponse
     [System.Text.Json.Serialization.JsonPropertyName("token")]
     public string Token { get; set; } = string.Empty;
 
-    [System.Text.Json.Serialization.JsonPropertyName("tokenType")]
     public string TokenType { get; set; } = "Bearer";
 
     [System.Text.Json.Serialization.JsonPropertyName("expiresAt")]
-    public DateTime ExpiresAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }
 
     [System.Text.Json.Serialization.JsonPropertyName("member")]
     public MemberTokenInfo? Member { get; set; }

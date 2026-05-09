@@ -48,6 +48,7 @@ builder.Services.AddSingleton<AMSAApiConnectionStatus>();
 builder.Services.AddScoped<ReportAccessService>();
 builder.Services.AddScoped<UnifiedReportService>();
 builder.Services.AddScoped<CurrentUserReportService>();
+builder.Services.AddScoped<AmsaDirectoryLookupCache>();
 
 builder.Services.AddAuthorizationCore();
 

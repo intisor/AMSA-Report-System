@@ -1,6 +1,7 @@
 @using AMSAReportingSystem.Data.Entities
 @using AMSAReportingSystem.Services
 @inject CurrentUserReportService CurrentUserReportService
+@inject AmsaDirectoryLookupCache DirectoryLookupCache
 
 <div class="container">
     @if (IsLoading)
@@ -175,7 +176,7 @@
                             {
                                 var submitted = report.DepartmentReports.Count(d => d.IsSubmitted);
                                 <tr>
-                                    <td><strong>@report.Unit.Name</strong></td>
+                                    <td><strong>@GetUnitName(report.UnitId)</strong></td>
                                     <td><span class="badge @GetStatusBadge(report.Status)">@report.Status</span></td>
                                     <td>@(report.ApprovedByPresidentAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
                                     <td>@submitted / @report.DepartmentReports.Count</td>
@@ -221,6 +222,7 @@
     private string MessageClass = "alert-info";
     private List<Report> Reports = new();
     private Dictionary<int, string> NotesByReport = new();
+    private Dictionary<int, string> UnitNamesById = new();
     private StateReportForm StateForm = new();
     private int StateReportId;
     private StateReport? CurrentStateReport;
@@ -243,6 +245,7 @@
 
             Reports = await CurrentUserReportService.GetMyStateReportsAsync(cycle.Id);
             NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
+            await WarmReportNamesAsync();
 
             CurrentStateReport = await CurrentUserReportService.GetMyStateReportAsync(cycle.Id);
             if (CurrentStateReport is not null)
@@ -397,6 +400,18 @@
     {
         Message = text;
         MessageClass = success ? "alert-success" : "alert-danger";
+    }
+
+    private string GetUnitName(int unitId) =>
+        UnitNamesById.TryGetValue(unitId, out var name) ? name : $"Unit {unitId}";
+
+    private async Task WarmReportNamesAsync()
+    {
+        var unitIds = Reports.Select(r => r.UnitId).Distinct().ToList();
+        foreach (var unitId in unitIds)
+        {
+            UnitNamesById[unitId] = await DirectoryLookupCache.GetUnitNameAsync(unitId);
+        }
     }
 
     private static string GetStatusBadge(ReportStatus status) => status switch

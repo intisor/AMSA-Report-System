@@ -77,7 +77,7 @@ public class AmsaAuthService
                 NationalId = member.Unit.State.National.NationalId,
                 NationalName = member.Unit.State.National.NationalName,
                 Token = tokenResult.Data.Token,
-                TokenExpiry = DateTime.UtcNow.AddSeconds(3600),
+                TokenExpiry = AmsaTokenCache.CalculateEffectiveExpiration(tokenResult.Data.ExpiresAt ?? DateTime.UtcNow.AddHours(1)),
                 Roles = member.Roles.Select(r => $"{r.DepartmentName}:{r.LevelType}").ToList()
             };
 

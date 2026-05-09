@@ -44,7 +44,6 @@ public class StateReport
             : 0;
 
     // Foreign keys
-    public State State { get; set; } = null!;
     public ReportingCycle Cycle { get; set; } = null!;
 
     // Navigation properties

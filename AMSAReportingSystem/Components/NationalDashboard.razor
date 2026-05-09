@@ -1,6 +1,7 @@
 @using AMSAReportingSystem.Data.Entities
 @using AMSAReportingSystem.Services
 @inject CurrentUserReportService CurrentUserReportService
+@inject AmsaDirectoryLookupCache DirectoryLookupCache
 
 <div class="container">
     @if (IsLoading)
@@ -23,7 +24,7 @@
             <div class="col-md-3"><strong>Total:</strong> @Reports.Count</div>
             <div class="col-md-3"><strong>Awaiting National:</strong> @Reports.Count(r => r.Status == ReportStatus.SubmittedToNational)</div>
             <div class="col-md-3"><strong>Acknowledged:</strong> @Reports.Count(r => r.Status == ReportStatus.Acknowledged)</div>
-            <div class="col-md-3"><strong>States:</strong> @Reports.Select(r => r.Unit.StateId).Distinct().Count()</div>
+            <div class="col-md-3"><strong>States:</strong> @Reports.Select(r => r.StateId).Distinct().Count()</div>
         </div>
 
         <div class="card">
@@ -52,8 +53,8 @@
                             @foreach (var report in Reports)
                             {
                                 <tr>
-                                    <td>@report.Unit.State.Name</td>
-                                    <td><strong>@report.Unit.Name</strong></td>
+                                    <td>@GetStateName(report.StateId)</td>
+                                    <td><strong>@GetUnitName(report.UnitId)</strong></td>
                                     <td><span class="badge @GetStatusBadge(report.Status)">@report.Status</span></td>
                                     <td>@(report.ApprovedByStateAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
                                     <td>
@@ -93,6 +94,8 @@
     private string MessageClass = "alert-info";
     private List<Report> Reports = new();
     private Dictionary<int, string> NotesByReport = new();
+    private Dictionary<int, string> UnitNamesById = new();
+    private Dictionary<int, string> StateNamesById = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,6 +111,7 @@
             CycleLabel = cycle.CycleMonth;
             Reports = await CurrentUserReportService.GetNationalReportsAsync(cycle.Id);
             NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
+            await WarmReportNamesAsync();
         }
         catch (Exception ex)
         {
@@ -137,6 +141,27 @@
     {
         Message = text;
         MessageClass = success ? "alert-success" : "alert-danger";
+    }
+
+    private string GetUnitName(int unitId) =>
+        UnitNamesById.TryGetValue(unitId, out var name) ? name : $"Unit {unitId}";
+
+    private string GetStateName(int stateId) =>
+        StateNamesById.TryGetValue(stateId, out var name) ? name : $"State {stateId}";
+
+    private async Task WarmReportNamesAsync()
+    {
+        var unitIds = Reports.Select(r => r.UnitId).Distinct().ToList();
+        foreach (var unitId in unitIds)
+        {
+            UnitNamesById[unitId] = await DirectoryLookupCache.GetUnitNameAsync(unitId);
+        }
+
+        var stateIds = Reports.Select(r => r.StateId).Distinct().ToList();
+        foreach (var stateId in stateIds)
+        {
+            StateNamesById[stateId] = await DirectoryLookupCache.GetStateNameAsync(stateId);
+        }
     }
 
     private static string GetStatusBadge(ReportStatus status) => status switch

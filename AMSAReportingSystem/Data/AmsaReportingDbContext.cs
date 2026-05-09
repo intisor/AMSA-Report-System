@@ -12,8 +12,6 @@ public class AMSAReportingDbContext : DbContext
 
     // Core entities
     public DbSet<ReportingCycle> ReportingCycles { get; set; }
-    public DbSet<State> States { get; set; }
-    public DbSet<Unit> Units { get; set; }
     public DbSet<Report> Reports { get; set; }
     public DbSet<DepartmentReport> DepartmentReports { get; set; }
 
@@ -56,36 +54,6 @@ public class AMSAReportingDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // ===== State Configuration =====
-        modelBuilder.Entity<State>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
-            entity.Property(e => e.Abbreviation).IsRequired().HasMaxLength(10);
-            entity.HasIndex(e => e.Name).IsUnique();
-            entity.HasMany(e => e.Units)
-                .WithOne(u => u.State)
-                .HasForeignKey(u => u.StateId)
-                .OnDelete(DeleteBehavior.Restrict);
-            entity.HasMany(e => e.StateReports)
-                .WithOne(sr => sr.State)
-                .HasForeignKey(sr => sr.StateId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        // ===== Unit Configuration =====
-        modelBuilder.Entity<Unit>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
-            entity.Property(e => e.PresidentName).IsRequired().HasMaxLength(200);
-            entity.HasIndex(e => e.AmsaDbUnitId).IsUnique();
-            entity.HasMany(e => e.Reports)
-                .WithOne(r => r.Unit)
-                .HasForeignKey(r => r.UnitId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
         // ===== Report Configuration =====
         modelBuilder.Entity<Report>(entity =>
         {
@@ -93,6 +61,7 @@ public class AMSAReportingDbContext : DbContext
             entity.HasIndex(e => new { e.UnitId, e.CycleId }).IsUnique();
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.UnitId);
+            entity.HasIndex(e => e.StateId);
             entity.HasIndex(e => e.CycleId);
             entity.Property(e => e.PresidentialNotes).HasMaxLength(1000);
             entity.Property(e => e.StateNotes).HasMaxLength(1000);
@@ -256,56 +225,6 @@ public class AMSAReportingDbContext : DbContext
     private void SeedData(ModelBuilder modelBuilder)
     {
         var seedTimestamp = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        // Seed all 36 Nigerian states + FCT
-        var states = new List<State>
-        {
-            new State { Id = 1, Name = "Abia", Abbreviation = "AB" },
-            new State { Id = 2, Name = "Adamawa", Abbreviation = "AD" },
-            new State { Id = 3, Name = "Akwa Ibom", Abbreviation = "AK" },
-            new State { Id = 4, Name = "Anambra", Abbreviation = "AN" },
-            new State { Id = 5, Name = "Bauchi", Abbreviation = "BC" },
-            new State { Id = 6, Name = "Bayelsa", Abbreviation = "BY" },
-            new State { Id = 7, Name = "Benue", Abbreviation = "BN" },
-            new State { Id = 8, Name = "Borno", Abbreviation = "BO" },
-            new State { Id = 9, Name = "Cross River", Abbreviation = "CR" },
-            new State { Id = 10, Name = "Delta", Abbreviation = "DT" },
-            new State { Id = 11, Name = "Ebonyi", Abbreviation = "EB" },
-            new State { Id = 12, Name = "Edo", Abbreviation = "ED" },
-            new State { Id = 13, Name = "Ekiti", Abbreviation = "EK" },
-            new State { Id = 14, Name = "Enugu", Abbreviation = "EN" },
-            new State { Id = 15, Name = "FCT", Abbreviation = "FC" },
-            new State { Id = 16, Name = "Gombe", Abbreviation = "GM" },
-            new State { Id = 17, Name = "Imo", Abbreviation = "IM" },
-            new State { Id = 18, Name = "Jigawa", Abbreviation = "JG" },
-            new State { Id = 19, Name = "Kaduna", Abbreviation = "KD" },
-            new State { Id = 20, Name = "Kano", Abbreviation = "KN" },
-            new State { Id = 21, Name = "Katsina", Abbreviation = "KT" },
-            new State { Id = 22, Name = "Kebbi", Abbreviation = "KB" },
-            new State { Id = 23, Name = "Kogi", Abbreviation = "KG" },
-            new State { Id = 24, Name = "Kwara", Abbreviation = "KW" },
-            new State { Id = 25, Name = "Lagos", Abbreviation = "LG" },
-            new State { Id = 26, Name = "Nasarawa", Abbreviation = "NS" },
-            new State { Id = 27, Name = "Niger", Abbreviation = "NG" },
-            new State { Id = 28, Name = "Ogun", Abbreviation = "OG" },
-            new State { Id = 29, Name = "Ondo", Abbreviation = "OD" },
-            new State { Id = 30, Name = "Osun", Abbreviation = "OS" },
-            new State { Id = 31, Name = "Oyo", Abbreviation = "OY" },
-            new State { Id = 32, Name = "Plateau", Abbreviation = "PL" },
-            new State { Id = 33, Name = "Rivers", Abbreviation = "RV" },
-            new State { Id = 34, Name = "Sokoto", Abbreviation = "SK" },
-            new State { Id = 35, Name = "Taraba", Abbreviation = "TR" },
-            new State { Id = 36, Name = "Yobe", Abbreviation = "YB" },
-            new State { Id = 37, Name = "Zamfara", Abbreviation = "ZM" }
-        };
-
-        foreach (var state in states)
-        {
-            state.CreatedAt = seedTimestamp;
-            state.UpdatedAt = seedTimestamp;
-        }
-
-        modelBuilder.Entity<State>().HasData(states);
 
         // Seed a sample reporting cycle for January 2025
         modelBuilder.Entity<ReportingCycle>().HasData(
