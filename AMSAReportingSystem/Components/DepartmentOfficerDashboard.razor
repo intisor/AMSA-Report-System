@@ -558,6 +558,9 @@
     private DashboardState CurrentState { get; set; } = DashboardState.NoReportExists;
 
     private int ProgressPercent => TotalDepartments == 0 ? 0 : (int)Math.Round((SubmittedDepartments * 100.0) / TotalDepartments);
+    private bool CanSubmitFullReport =>
+        CurrentUser is not null &&
+        (CurrentUser.IsUnitLeadership || CurrentUser.IsStateLeadership || CurrentUser.IsNationalLeadership || CurrentUser.HasSudoAccess);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -649,7 +652,7 @@
 
     private async Task OnSubmitReportAsync()
     {
-        if (CurrentReport is null || SubmittedDepartments < TotalDepartments)
+        if (CurrentReport is null || !CanSubmitFullReport || SubmittedDepartments < TotalDepartments)
             return;
 
         IsLoading = true;
@@ -845,17 +848,27 @@
                     </div>
                 </div>
 
-                <button class="btn btn-success btn-lg w-100" @onclick="OpenSubmitReportModal" disabled="@(SubmittedDepartments < TotalDepartments || IsLoading)">
-                    <i class="bi bi-check2-circle me-2"></i> 
-                    @if (SubmittedDepartments < TotalDepartments)
-                    {
-                        <span>Submit When All Sections Complete</span>
-                    }
-                    else
-                    {
-                        <span>Submit Report to Unit President</span>
-                    }
-                </button>
+                @if (CanSubmitFullReport)
+                {
+                    <button class="btn btn-success btn-lg w-100" @onclick="OpenSubmitReportModal" disabled="@(SubmittedDepartments < TotalDepartments || IsLoading)">
+                        <i class="bi bi-check2-circle me-2"></i> 
+                        @if (SubmittedDepartments < TotalDepartments)
+                        {
+                            <span>Submit When All Sections Complete</span>
+                        }
+                        else
+                        {
+                            <span>Submit Report to Unit President</span>
+                        }
+                    </button>
+                }
+                else
+                {
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Your role is to complete and submit your assigned department section(s). Unit leadership handles full report submission.
+                    </div>
+                }
             </div>
 
             <div class="col-lg-4">
@@ -953,9 +966,19 @@
                     </div>
                 </div>
 
-                <button class="btn btn-success btn-lg w-100 mt-4" @onclick="OpenSubmitReportModal" disabled="@(SubmittedDepartments < TotalDepartments || IsLoading)">
-                    <i class="bi bi-check2-circle me-2"></i> Resubmit Report
-                </button>
+                @if (CanSubmitFullReport)
+                {
+                    <button class="btn btn-success btn-lg w-100 mt-4" @onclick="OpenSubmitReportModal" disabled="@(SubmittedDepartments < TotalDepartments || IsLoading)">
+                        <i class="bi bi-check2-circle me-2"></i> Resubmit Report
+                    </button>
+                }
+                else
+                {
+                    <div class="alert alert-info mt-4 mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        Update your department section(s) and submit them. Unit leadership will handle report re-submission.
+                    </div>
+                }
             </div>
             <div class="col-lg-4">
                 <div class="card shadow-sm">

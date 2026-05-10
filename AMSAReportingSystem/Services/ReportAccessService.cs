@@ -73,7 +73,12 @@ public class ReportAccessService
             return true;
         }
 
-        // Department officers save/submit sections, but leadership initiates full report submission.
+        // Department officers in the same unit/state can create/manage draft report shell.
+        if (unitId == actor.UnitId && stateId == actor.StateId)
+        {
+            return actor.ParsedRoles.Any(r => r.LevelType == LevelType.Unit);
+        }
+
         return false;
     }
 
