@@ -124,10 +124,17 @@ public class UnifiedReportService(
             throw new UnauthorizedAccessException("You are not allowed to manage this state report.");
         }
 
-        return await _db.StateReports
+        var stateReport = await _db.StateReports
             .Include(sr => sr.Programs)
-            .Include(sr => sr.ActivityLogs)
             .FirstOrDefaultAsync(sr => sr.StateId == stateId && sr.CycleId == cycleId, ct);
+
+        if (stateReport is null)
+        {
+            return null;
+        }
+
+        await RecomputeStateAggregateAsync(stateReport, ct);
+        return stateReport;
     }
 
     /// <summary>
@@ -158,21 +165,10 @@ public class UnifiedReportService(
         _db.StateReports.Add(report);
         await _db.SaveChangesAsync(ct);
 
-        _db.StateReportActivityLogs.Add(new StateReportActivityLog
-        {
-            StateReportId = report.Id,
-            ActionByMemberId = actor.MemberId,
-            Action = "StateReportCreated",
-            ActionAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync(ct);
-
-        // Link existing submitted department reports
-        await LinkDepartmentReportsToStateReportAsync(report, ct);
+        await RecomputeStateAggregateAsync(report, ct);
 
         return await _db.StateReports
             .Include(sr => sr.Programs)
-            .Include(sr => sr.ActivityLogs)
             .FirstAsync(sr => sr.Id == report.Id, ct);
     }
 
@@ -206,33 +202,14 @@ public class UnifiedReportService(
 
         ValidateStateReportForm(form);
 
-        stateReport.UnitPresidentsAttended = form.UnitPresidentsAttended;
-        stateReport.TotalUnitPresidents = form.TotalUnitPresidents;
-        stateReport.UnitPerformanceRating = form.UnitPerformanceRating;
+        // Preserve leadership commentary fields, but enforce aggregate metrics/programs from unit reports.
         stateReport.UnitImprovementPlan = form.UnitImprovementPlan;
         stateReport.ChallengesFaced = form.ChallengesFaced;
         stateReport.NationalSupportNeeded = form.NationalSupportNeeded;
         stateReport.OtherNotes = form.OtherNotes;
         stateReport.UpdatedAt = DateTime.UtcNow;
 
-        _db.StateReportPrograms.RemoveRange(stateReport.Programs);
-        var programs = form.Programs
-            .Where(p => !string.IsNullOrWhiteSpace(p.ProgramName)
-                        || !string.IsNullOrWhiteSpace(p.Objectives)
-                        || !string.IsNullOrWhiteSpace(p.Outcomes)
-                        || p.TotalAttendance.HasValue
-                        || p.TotalBeneficiaries.HasValue)
-            .Select(p => new StateReportProgram
-            {
-                StateReportId = stateReport.Id,
-                ProgramName = string.IsNullOrWhiteSpace(p.ProgramName) ? "Unnamed Program" : p.ProgramName.Trim(),
-                Objectives = p.Objectives,
-                Outcomes = p.Outcomes,
-                TotalAttendance = p.TotalAttendance,
-                TotalBeneficiaries = p.TotalBeneficiaries
-            })
-            .ToList();
-        _db.StateReportPrograms.AddRange(programs);
+        await RecomputeStateAggregateAsync(stateReport, ct);
 
         if (markSubmitted)
         {
@@ -240,23 +217,12 @@ public class UnifiedReportService(
             stateReport.SubmittedAt = DateTime.UtcNow;
             stateReport.SubmittedByMemberId = actor.MemberId;
 
-            // Link submitted department reports for audit trail
-            await LinkDepartmentReportsToStateReportAsync(stateReport, ct);
         }
-
-        _db.StateReportActivityLogs.Add(new StateReportActivityLog
-        {
-            StateReportId = stateReport.Id,
-            ActionByMemberId = actor.MemberId,
-            Action = markSubmitted ? "StateReportSubmittedToNational" : "StateReportSaved",
-            ActionAt = DateTime.UtcNow
-        });
 
         await _db.SaveChangesAsync(ct);
 
         return await _db.StateReports
             .Include(sr => sr.Programs)
-            .Include(sr => sr.ActivityLogs)
             .FirstAsync(sr => sr.Id == stateReport.Id, ct);
     }
 
@@ -286,10 +252,14 @@ public class UnifiedReportService(
             throw new UnauthorizedAccessException("You are not allowed to create or manage reports for this unit.");
         }
 
-        return await _db.Reports
+        var currentUser = actor;
+
+       var  reports =  await _db.Reports
             .Include(r => r.DepartmentReports)
             .Include(r => r.ActivityLogs)
             .FirstOrDefaultAsync(r => r.UnitId == amsaUnitId && r.CycleId == cycleId, ct);
+
+        return reports ?? null;
     }
 
     /// <summary>
@@ -776,38 +746,55 @@ public class UnifiedReportService(
         return cycle?.Id;
     }
 
-    /// <summary>
-    /// Links all submitted department reports from units in a state to the state report
-    /// Used for rollup aggregation and audit trail
-    /// </summary>
-    private async Task LinkDepartmentReportsToStateReportAsync(StateReport stateReport, CancellationToken ct)
+    private async Task RecomputeStateAggregateAsync(StateReport stateReport, CancellationToken ct)
     {
-        // Get all submitted department reports for reports in this state + cycle
-        var submittedDepartmentReports = await _db.DepartmentReports
-            .Where(dr => _db.Reports
-                .Where(r => r.CycleId == stateReport.CycleId && r.StateId == stateReport.StateId)
-                .Select(r => r.Id)
-                .Contains(dr.ReportId) && dr.IsSubmitted)
-            .ToListAsync(ct);
+        var stateReportsQuery = _db.Reports
+            .AsNoTracking()
+            .Where(r => r.StateId == stateReport.StateId && r.CycleId == stateReport.CycleId);
 
-        // Remove existing links
-        var existingLinks = await _db.StateReportDepartmentData
-            .Where(srd => srd.StateReportId == stateReport.Id)
-            .ToListAsync(ct);
-        _db.StateReportDepartmentData.RemoveRange(existingLinks);
-
-        // Create new links
-        var newLinks = submittedDepartmentReports
-            .Select(dr => new StateReportDepartmentData
-            {
-                StateReportId = stateReport.Id,
-                DepartmentReportId = dr.Id,
-                AddedAt = DateTime.UtcNow
-            })
+        var allUnitReports = await stateReportsQuery.ToListAsync(ct);
+        var submittedToStateOrHigher = allUnitReports
+            .Where(r => r.Status is ReportStatus.SubmittedToState or ReportStatus.SubmittedToNational or ReportStatus.Acknowledged)
             .ToList();
 
-        _db.StateReportDepartmentData.AddRange(newLinks);
-        await _db.SaveChangesAsync(ct);
+        stateReport.TotalUnitPresidents = allUnitReports.Count;
+        stateReport.UnitPresidentsAttended = submittedToStateOrHigher.Count;
+        stateReport.UnitPerformanceRating = stateReport.TotalUnitPresidents == 0
+            ? 0
+            : (int)Math.Round((stateReport.UnitPresidentsAttended * 100.0) / stateReport.TotalUnitPresidents);
+
+        var reportIds = allUnitReports.Select(r => r.Id).ToList();
+        var departmentRows = reportIds.Count == 0
+            ? []
+            : await _db.DepartmentReports
+                .AsNoTracking()
+                .Where(dr => reportIds.Contains(dr.ReportId) && dr.IsSubmitted)
+                .ToListAsync(ct);
+
+        var groupedByDepartment = departmentRows
+            .GroupBy(dr => dr.Department)
+            .OrderBy(g => g.Key.ToString())
+            .ToList();
+
+        var existingPrograms = await _db.StateReportPrograms
+            .Where(p => p.StateReportId == stateReport.Id)
+            .ToListAsync(ct);
+        _db.StateReportPrograms.RemoveRange(existingPrograms);
+
+        var aggregatePrograms = groupedByDepartment.Select(group => new StateReportProgram
+        {
+            StateReportId = stateReport.Id,
+            ProgramName = group.Key.ToString(),
+            Objectives = "Auto-aggregated from submitted unit department reports.",
+            Outcomes = $"Submitted unit reports: {group.Count()}",
+            TotalAttendance = group.Sum(x => x.AttendanceCount ?? x.MemberParticipantCount ?? 0),
+            TotalBeneficiaries = group.Sum(x => x.BeneficiaryCount ?? 0)
+        }).ToList();
+
+        if (aggregatePrograms.Count > 0)
+        {
+            _db.StateReportPrograms.AddRange(aggregatePrograms);
+        }
     }
 
     #endregion

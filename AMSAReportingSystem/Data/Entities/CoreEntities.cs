@@ -18,7 +18,6 @@ public class ReportingCycle
     // Navigation properties
     public ICollection<Report> Reports { get; set; } = new List<Report>();
     public ICollection<StateReport> StateReports { get; set; } = new List<StateReport>();
-    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 }
 
 /// <summary>
@@ -61,7 +60,6 @@ public class Report
     // Navigation properties
     public ICollection<DepartmentReport> DepartmentReports { get; set; } = new List<DepartmentReport>();
     public ICollection<ReportActivityLog> ActivityLogs { get; set; } = new List<ReportActivityLog>();
-    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 }
 
 /// <summary>
@@ -99,8 +97,6 @@ public class DepartmentReport
     // Foreign keys
     public Report Report { get; set; } = null!;
 
-    // Navigation properties
-    public ICollection<StateReportDepartmentData> StateReportDataLinks { get; set; } = new List<StateReportDepartmentData>();
 }
 
 /// <summary>

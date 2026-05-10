@@ -47,11 +47,7 @@ public class StateReport
     public ReportingCycle Cycle { get; set; } = null!;
 
     // Navigation properties
-    public ICollection<StateReportActivity> Activities { get; set; } = new List<StateReportActivity>();
     public ICollection<StateReportProgram> Programs { get; set; } = new List<StateReportProgram>();
-    public ICollection<StateReportAttachment> Attachments { get; set; } = new List<StateReportAttachment>();
-    public ICollection<StateReportActivityLog> ActivityLogs { get; set; } = new List<StateReportActivityLog>();
-    public ICollection<StateReportDepartmentData> DepartmentDataLinks { get; set; } = new List<StateReportDepartmentData>();
 }
 
 /// <summary>
@@ -71,73 +67,3 @@ public class StateReportProgram
     public StateReport StateReport { get; set; } = null!;
 }
 
-/// <summary>
-/// Activities/Programs at state level (Q3)
-/// </summary>
-public class StateReportActivity
-{
-    public int Id { get; set; }
-    public int StateReportId { get; set; }
-    public string ActivityTitle { get; set; } = string.Empty;
-    public string? Objectives { get; set; }
-    public string? Outcomes { get; set; }
-    public int? AttendanceCount { get; set; }
-    public int? BeneficiaryCount { get; set; }
-    public DateTime? ActivityDate { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-    // Foreign key
-    public StateReport StateReport { get; set; } = null!;
-}
-
-/// <summary>
-/// File attachments for state reports
-/// </summary>
-public class StateReportAttachment
-{
-    public int Id { get; set; }
-    public int StateReportId { get; set; }
-    public string FileName { get; set; } = string.Empty;
-    public string FilePath { get; set; } = string.Empty;
-    public string FileType { get; set; } = string.Empty;
-    public long FileSizeBytes { get; set; }
-    public int UploadedByMemberId { get; set; }
-    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
-
-    // Foreign key
-    public StateReport StateReport { get; set; } = null!;
-}
-
-/// <summary>
-/// Audit trail for state report actions
-/// </summary>
-public class StateReportActivityLog
-{
-    public int Id { get; set; }
-    public int StateReportId { get; set; }
-    public int ActionByMemberId { get; set; }
-    public string Action { get; set; } = string.Empty; // "Submitted", "PresidentApproved", etc.
-    public string? Notes { get; set; }
-    public DateTime ActionAt { get; set; } = DateTime.UtcNow;
-
-    // Foreign key
-    public StateReport StateReport { get; set; } = null!;
-}
-
-/// <summary>
-/// Junction entity linking StateReport to DepartmentReport
-/// Enables state-level rollup to track which unit departments contributed to state aggregation
-/// </summary>
-public class StateReportDepartmentData
-{
-    public int Id { get; set; }
-    public int StateReportId { get; set; }
-    public int DepartmentReportId { get; set; }
-
-    // Track when this department was rolled into the state report
-    public DateTime AddedAt { get; set; } = DateTime.UtcNow;
-
-    // Foreign keys
-    public StateReport StateReport { get; set; } = null!;
-    public DepartmentReport DepartmentReport { get; set; } = null!;
-}
