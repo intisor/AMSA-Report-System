@@ -20,23 +20,7 @@
             <div class="alert @MessageClass">@Message</div>
         }
 
-        @if (CurrentStateReport is null)
-        {
-            <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">State-Level Monthly Report</h5>
-                    <span class="badge bg-secondary">Not Started</span>
-                </div>
-                <div class="card-body">
-                    <p class="mb-2">No state draft exists yet for @CycleLabel.</p>
-                    <p class="text-muted mb-0">Your state report is an aggregate of unit reports in this cycle. Create the state draft only when you are ready to begin collecting the summary.</p>
-                </div>
-                <div class="card-footer d-flex gap-2">
-                    <button class="btn btn-primary" @onclick="CreateStateDraftAsync" disabled="@IsLoading">Create State Report</button>
-                </div>
-            </div>
-        }
-        else
+        @if (CurrentStateReport is not null)
         {
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -247,7 +231,7 @@
             NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
             await WarmReportNamesAsync();
 
-            CurrentStateReport = await CurrentUserReportService.GetMyStateReportAsync(cycle.Id);
+            CurrentStateReport = await CurrentUserReportService.EnsureMyStateReportAsync(cycle.Id);
             if (CurrentStateReport is not null)
             {
                 StateReportId = CurrentStateReport.Id;
@@ -314,38 +298,6 @@
         finally
         {
             IsSavingStateForm = false;
-        }
-    }
-
-    private async Task CreateStateDraftAsync()
-    {
-        if (CurrentUser is null || IsLoading)
-        {
-            return;
-        }
-
-        IsLoading = true;
-        try
-        {
-            var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
-            CurrentStateReport = await CurrentUserReportService.CreateMyStateReportAsync(cycle.Id);
-            StateReportId = CurrentStateReport.Id;
-            StateReportSubmitted = CurrentStateReport.Status is ReportStatus.SubmittedToNational or ReportStatus.Acknowledged;
-            StateForm = StateReportFormMapper.ToForm(CurrentStateReport);
-            if (StateForm.Programs.Count == 0)
-            {
-                StateForm.Programs.Add(new StateProgramForm());
-            }
-
-            SetMessage("State report created and linked to the current unit report aggregator.", true);
-        }
-        catch (Exception ex)
-        {
-            SetMessage(ex.Message, false);
-        }
-        finally
-        {
-            IsLoading = false;
         }
     }
 

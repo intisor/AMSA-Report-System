@@ -410,9 +410,9 @@ public class UnifiedReportService(
             throw new InvalidOperationException($"Report {reportId} cannot be submitted from status {report.Status}.");
         }
 
-        if (report.DepartmentReports.Any(d => !d.IsSubmitted))
+        if (!report.DepartmentReports.Any(d => d.IsSubmitted))
         {
-            throw new InvalidOperationException("All department reports must be submitted before report submission.");
+            throw new InvalidOperationException("At least one department report must be submitted before report submission.");
         }
 
         report.Status = ReportStatus.SubmittedToPresident;
@@ -445,12 +445,21 @@ public class UnifiedReportService(
             throw new UnauthorizedAccessException("You are not allowed to approve this report.");
         }
 
-        if (report.Status != ReportStatus.SubmittedToPresident)
+        if (report.Status is not (ReportStatus.SubmittedToPresident or ReportStatus.Draft or ReportStatus.RejectedByPresident))
         {
-            throw new InvalidOperationException($"Report must be in {ReportStatus.SubmittedToPresident} state for unit approval.");
+            throw new InvalidOperationException("Report cannot be approved from current state.");
+        }
+
+        var submittedCount = await _db.DepartmentReports
+            .Where(d => d.ReportId == report.Id && d.IsSubmitted)
+            .CountAsync(ct);
+        if (submittedCount == 0)
+        {
+            throw new InvalidOperationException("At least one department section must be submitted before forwarding to state.");
         }
 
         report.Status = ReportStatus.SubmittedToState;
+        report.SubmittedToPresidentAt ??= DateTime.UtcNow;
         report.ApprovedByPresidentAt = DateTime.UtcNow;
         report.ApprovedByPresidentMemberId = actor.MemberId;
         report.PresidentialNotes = notes;
@@ -481,9 +490,9 @@ public class UnifiedReportService(
             throw new UnauthorizedAccessException("You are not allowed to reject this report.");
         }
 
-        if (report.Status != ReportStatus.SubmittedToPresident)
+        if (report.Status is not (ReportStatus.SubmittedToPresident or ReportStatus.Draft))
         {
-            throw new InvalidOperationException($"Report must be in {ReportStatus.SubmittedToPresident} state for rejection.");
+            throw new InvalidOperationException("Report cannot be rejected from current state.");
         }
 
         report.Status = ReportStatus.RejectedByPresident;
