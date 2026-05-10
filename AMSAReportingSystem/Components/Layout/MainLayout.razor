@@ -11,10 +11,10 @@
                 <strong>AMSA</strong> Reporting
             </a>
             <span class="badge @GetAmsaBadgeClass() me-3">@GetAmsaBadgeText()</span>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <button class="navbar-toggler" type="button" @onclick="ToggleNavMenu">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
+            <div class="collapse navbar-collapse @(IsNavMenuOpen ? "show" : string.Empty)" id="navbarNav">
                 <NavMenu />
             </div>
         </div>
@@ -69,6 +69,13 @@
 </style>
 
 @code {
+    private bool IsNavMenuOpen;
+
+    private void ToggleNavMenu()
+    {
+        IsNavMenuOpen = !IsNavMenuOpen;
+    }
+
     private string GetAmsaBadgeText()
     {
         if (!ApiStatus.IsChecked)

@@ -21,11 +21,11 @@
         }
 
         <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle" href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <a class="nav-link dropdown-toggle" href="#" id="userMenu" role="button" aria-expanded="@IsUserMenuOpen" @onclick="ToggleUserMenu" @onclick:preventDefault="true">
                 <strong>@CurrentUser?.FirstName</strong>
                 <span class="badge bg-light text-dark ms-2">@GetRoleLabel()</span>
             </a>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+            <ul class="dropdown-menu dropdown-menu-end @(IsUserMenuOpen ? "show" : string.Empty)" aria-labelledby="userMenu">
                 <li><span class="dropdown-item-text">@CurrentUser?.FullName</span></li>
                 <li><hr class="dropdown-divider"></li>
                 <li><a class="dropdown-item" href="#" @onclick="LogoutAsync">Logout</a></li>
@@ -43,6 +43,7 @@
 @code {
     private AuthContext? CurrentUser;
     private string? MyReportLink;
+    private bool IsUserMenuOpen;
 
     protected override void OnInitialized()
     {
@@ -53,9 +54,15 @@
 
     private async Task LogoutAsync(MouseEventArgs e)
     {
+        IsUserMenuOpen = false;
         var amsaProvider = (AMSAAuthStateProvider)AuthStateProvider;
         await amsaProvider.LogoutAsync();
         Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private void ToggleUserMenu(MouseEventArgs _)
+    {
+        IsUserMenuOpen = !IsUserMenuOpen;
     }
 
     private string GetRoleLabel()
