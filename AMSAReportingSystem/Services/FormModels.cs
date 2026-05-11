@@ -210,8 +210,8 @@ public static class StateReportFormMapper
         return new StateReportForm
         {
             StateReportId = report.Id,
-            UnitPresidentsAttended = report.UnitPresidentsAttended,
-            TotalUnitPresidents = report.TotalUnitPresidents,
+            UnitPresidentsAttended = report.UnitsAttendedTo,
+            TotalUnitPresidents = report.TotalUnitReportsCount,
             UnitPerformanceRating = report.UnitPerformanceRating,
             UnitImprovementPlan = report.UnitImprovementPlan,
             ChallengesFaced = report.ChallengesFaced,

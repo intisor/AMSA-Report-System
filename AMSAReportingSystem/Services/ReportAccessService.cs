@@ -35,13 +35,13 @@ public class ReportAccessService
             return true;
         }
 
-        // State office holders for same department across units in their state.
+        // State office holders for same department across units in their state can edit too
         if (stateId == actor.StateId && HasDepartmentAtLevel(actor, departmentName, LevelType.State))
         {
             return true;
         }
 
-        // Unit office holders for same department inside own unit.
+        // Unit office holders for same department inside own unit can edut 
         if (unitId == actor.UnitId && HasDepartmentAtLevel(actor, departmentName, LevelType.Unit))
         {
             return true;
@@ -82,22 +82,17 @@ public class ReportAccessService
         return false;
     }
 
-    public bool CanReviewAtUnitLevel(AuthContext actor, int unitId) =>
-        IsNationalLeadership(actor) || (unitId == actor.UnitId && IsUnitLeadership(actor));
+    public bool CanReviewAtUnitLevel(AuthContext actor, int unitId) => IsNationalLeadership(actor) || (unitId == actor.UnitId && IsUnitLeadership(actor));
 
-    public bool CanReviewAtStateLevel(AuthContext actor, int stateId) =>
-        IsNationalLeadership(actor) || (stateId == actor.StateId && IsStateLeadership(actor));
+    public bool CanReviewAtStateLevel(AuthContext actor, int stateId) => IsNationalLeadership(actor) || (stateId == actor.StateId && IsStateLeadership(actor));
 
     private static bool HasLeadershipAtLevel(AuthContext actor, LevelType levelType) =>
-        actor.ParsedRoles.Any(r =>
-            r.LevelType == levelType
-            && IsLeadershipDepartment(r.DepartmentName, r.LevelType));
+        actor.ParsedRoles.Any(r => r.LevelType == levelType && IsLeadershipDepartment(r.DepartmentName, r.LevelType));
 
     private static bool HasDepartmentAtLevel(AuthContext actor, string department, LevelType levelType)
     {
         var normalizedTarget = NormalizeDepartmentName(department);
-        return actor.ParsedRoles.Any(r =>
-            r.LevelType == levelType
+        return actor.ParsedRoles.Any(r => r.LevelType == levelType
             && NormalizeDepartmentName(r.DepartmentName).Equals(normalizedTarget, StringComparison.OrdinalIgnoreCase));
     }
 

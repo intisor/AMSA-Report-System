@@ -12,11 +12,7 @@ namespace AMSAReportingSystem.Services;
 /// Consolidates DepartmentReportService, StateReportService, and ReportLifecycleService functionality
 /// Organized by operational scope: Department Ops, State Ops, Report Lifecycle, and Cycles
 /// </summary>
-public class UnifiedReportService(
-    AMSAReportingDbContext db,
-    IAmsaApiClient amSaApiClient,
-    ReportAccessService access,
-    ILogger<UnifiedReportService> logger)
+public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaApiClient,ReportAccessService access,ILogger<UnifiedReportService> logger)
 {
     private const int DefaultSubmissionGraceDays = 7;
 
@@ -31,13 +27,7 @@ public class UnifiedReportService(
     /// Saves department-specific report data to database
     /// Validates JSON, checks permissions, and updates submission status
     /// </summary>
-    public async Task<DepartmentReport> SaveDepartmentDataAsync(
-        int reportId,
-        DepartmentType department,
-        string reportDataJson,
-        AuthContext actor,
-        bool markSubmitted,
-        CancellationToken ct = default)
+    public async Task<DepartmentReport> SaveDepartmentDataAsync(int reportId,DepartmentType department,string reportDataJson,AuthContext actor,bool markSubmitted,CancellationToken ct = default)
     {
         ValidateJson(reportDataJson);
 
@@ -45,9 +35,8 @@ public class UnifiedReportService(
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
 
         if (!_access.CanEditDepartment(actor, report.UnitId, report.StateId, department))
-        {
             throw new UnauthorizedAccessException("You are not allowed to edit this department report.");
-        }
+        
 
         var departmentReport = await _db.DepartmentReports
             .FirstOrDefaultAsync(d => d.ReportId == reportId && d.Department == department, ct);
@@ -96,10 +85,7 @@ public class UnifiedReportService(
     /// <summary>
     /// Retrieves a specific department report with full data
     /// </summary>
-    public async Task<DepartmentReport?> GetDepartmentReportAsync(
-        int reportId,
-        DepartmentType department,
-        CancellationToken ct = default)
+    public async Task<DepartmentReport?> GetDepartmentReportAsync(int reportId,DepartmentType department,CancellationToken ct = default)
     {
         return await _db.DepartmentReports
             .FirstOrDefaultAsync(d => d.ReportId == reportId && d.Department == department, ct);
@@ -113,25 +99,19 @@ public class UnifiedReportService(
     /// Retrieves state-level report with authorization check
     /// Includes programs and activity logs
     /// </summary>
-    public async Task<StateReport?> GetStateReportAsync(
-        AuthContext actor,
-        int stateId,
-        int cycleId,
-        CancellationToken ct = default)
+    public async Task<StateReport?> GetStateReportAsync(AuthContext actor,int stateId,int cycleId,CancellationToken ct = default)
     {
-        if (!_access.CanReviewAtStateLevel(actor, stateId))
-        {
+        if (!_access.CanReviewAtStateLevel(actor, stateId)) 
             throw new UnauthorizedAccessException("You are not allowed to manage this state report.");
-        }
+        
 
         var stateReport = await _db.StateReports
             .Include(sr => sr.Programs)
             .FirstOrDefaultAsync(sr => sr.StateId == stateId && sr.CycleId == cycleId, ct);
 
         if (stateReport is null)
-        {
             return null;
-        }
+        
 
         await RecomputeStateAggregateAsync(stateReport, ct);
         return stateReport;
@@ -141,17 +121,12 @@ public class UnifiedReportService(
     /// Ensures a state report exists, creating if necessary
     /// Initializes with Draft status and links available submitted department reports
     /// </summary>
-    public async Task<StateReport> EnsureStateReportAsync(
-        AuthContext actor,
-        int stateId,
-        int cycleId,
-        CancellationToken ct = default)
+    public async Task<StateReport> EnsureStateReportAsync(AuthContext actor,int stateId,int cycleId,CancellationToken ct = default)
     {
         var existing = await GetStateReportAsync(actor, stateId, cycleId, ct);
+
         if (existing is not null)
-        {
             return existing;
-        }
 
         var report = new StateReport
         {
@@ -176,12 +151,7 @@ public class UnifiedReportService(
     /// Updates state report with aggregated data and leadership notes
     /// Validates form data and manages program list updates
     /// </summary>
-    public async Task<StateReport> SaveStateReportAsync(
-        AuthContext actor,
-        int stateReportId,
-        StateReportForm form,
-        bool markSubmitted,
-        CancellationToken ct = default)
+    public async Task<StateReport> SaveStateReportAsync(AuthContext actor,int stateReportId,StateReportForm form,bool markSubmitted,CancellationToken ct = default)
     {
         var stateReport = await _db.StateReports
             .Include(sr => sr.Programs)
@@ -189,16 +159,13 @@ public class UnifiedReportService(
             ?? throw new InvalidOperationException($"State report {stateReportId} not found.");
 
         if (!_access.CanReviewAtStateLevel(actor, stateReport.StateId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to edit this state report.");
-        }
 
         await EnsureCycleOpenForEditsAsync(stateReport.CycleId, ct);
 
         if (stateReport.Status is ReportStatus.SubmittedToNational or ReportStatus.Acknowledged)
-        {
             throw new InvalidOperationException("This state report has already been submitted and is read-only.");
-        }
+        
 
         ValidateStateReportForm(form);
 
@@ -216,7 +183,6 @@ public class UnifiedReportService(
             stateReport.Status = ReportStatus.SubmittedToNational;
             stateReport.SubmittedAt = DateTime.UtcNow;
             stateReport.SubmittedByMemberId = actor.MemberId;
-
         }
 
         await _db.SaveChangesAsync(ct);
@@ -248,13 +214,12 @@ public class UnifiedReportService(
     public async Task<Report?> GetDraftAsync(AuthContext actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
     {
         if (!_access.CanInitiateReportSubmission(actor, amsaUnitId, actor.StateId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to create or manage reports for this unit.");
-        }
+        
 
         var currentUser = actor;
 
-       var  reports =  await _db.Reports
+        var  reports =  await _db.Reports
             .Include(r => r.DepartmentReports)
             .Include(r => r.ActivityLogs)
             .FirstOrDefaultAsync(r => r.UnitId == amsaUnitId && r.CycleId == cycleId, ct);
@@ -269,9 +234,8 @@ public class UnifiedReportService(
     {
         var existing = await GetDraftAsync(actor, amsaUnitId, cycleId, ct);
         if (existing is not null)
-        {
             return existing;
-        }
+        
 
         var report = new Report
         {
@@ -320,15 +284,13 @@ public class UnifiedReportService(
     public async Task<List<Report>> GetUnitReportsAsync(AuthContext actor, int unitId, int? cycleId = null, CancellationToken ct = default)
     {
         if (!_access.CanReviewAtUnitLevel(actor, unitId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
-        }
+        
 
         var selectedCycleId = await ResolveCycleIdAsync(cycleId, ct);
         if (selectedCycleId is null)
-        {
             return [];
-        }
+  
 
         return await _db.Reports
             .Include(r => r.Cycle)
@@ -344,15 +306,12 @@ public class UnifiedReportService(
     public async Task<List<Report>> GetStateReportsAsync(AuthContext actor, int stateId, int? cycleId = null, CancellationToken ct = default)
     {
         if (!_access.CanReviewAtStateLevel(actor, stateId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to view reports for this state.");
-        }
+        
 
         var selectedCycleId = await ResolveCycleIdAsync(cycleId, ct);
         if (selectedCycleId is null)
-        {
             return [];
-        }
 
         return await _db.Reports
             .Include(r => r.Cycle)
@@ -369,15 +328,13 @@ public class UnifiedReportService(
     public async Task<List<Report>> GetNationalReportsAsync(AuthContext actor, int? cycleId = null, CancellationToken ct = default)
     {
         if (!_access.IsNationalLeadership(actor))
-        {
             throw new UnauthorizedAccessException("Only national leadership can view national report board.");
-        }
+        
 
         var selectedCycleId = await ResolveCycleIdAsync(cycleId, ct);
         if (selectedCycleId is null)
-        {
             return [];
-        }
+        
 
         return await _db.Reports
             .Include(r => r.Cycle)
@@ -390,30 +347,27 @@ public class UnifiedReportService(
 
     /// <summary>
     /// Submits report from unit to president for review
-    /// All departments must be submitted first
+    /// At least one departments must be submitted first
     /// </summary>
     public async Task<Report> SubmitReportToPresidentAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports
             .Include(r => r.DepartmentReports)
-            .FirstOrDefaultAsync(r => r.Id == reportId, ct)
-            ?? throw new InvalidOperationException($"Report {reportId} not found.");
+            .FirstOrDefaultAsync(r => r.Id == reportId, ct) ?? throw new InvalidOperationException($"Report {reportId} not found.");
+
         await EnsureCycleOpenForEditsAsync(report.CycleId, ct);
 
         if (!_access.CanInitiateReportSubmission(actor, report.UnitId, report.StateId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to submit this report.");
-        }
+        
 
         if (report.Status != ReportStatus.Draft && report.Status != ReportStatus.RejectedByPresident)
-        {
             throw new InvalidOperationException($"Report {reportId} cannot be submitted from status {report.Status}.");
-        }
+        
 
         if (!report.DepartmentReports.Any(d => d.IsSubmitted))
-        {
             throw new InvalidOperationException("At least one department report must be submitted before report submission.");
-        }
+        
 
         report.Status = ReportStatus.SubmittedToPresident;
         report.SubmittedToPresidentAt = DateTime.UtcNow;
@@ -441,22 +395,20 @@ public class UnifiedReportService(
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
         if (!_access.CanReviewAtUnitLevel(actor, report.UnitId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to approve this report.");
-        }
+        
 
         if (report.Status is not (ReportStatus.SubmittedToPresident or ReportStatus.Draft or ReportStatus.RejectedByPresident))
-        {
             throw new InvalidOperationException("Report cannot be approved from current state.");
-        }
+        
 
         var submittedCount = await _db.DepartmentReports
             .Where(d => d.ReportId == report.Id && d.IsSubmitted)
             .CountAsync(ct);
+
         if (submittedCount == 0)
-        {
             throw new InvalidOperationException("At least one department section must be submitted before forwarding to state.");
-        }
+        
 
         report.Status = ReportStatus.SubmittedToState;
         report.SubmittedToPresidentAt ??= DateTime.UtcNow;
@@ -486,14 +438,11 @@ public class UnifiedReportService(
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
         if (!_access.CanReviewAtUnitLevel(actor, report.UnitId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to reject this report.");
-        }
+        
 
         if (report.Status is not (ReportStatus.SubmittedToPresident or ReportStatus.Draft))
-        {
             throw new InvalidOperationException("Report cannot be rejected from current state.");
-        }
 
         report.Status = ReportStatus.RejectedByPresident;
         report.PresidentialNotes = notes;
@@ -517,18 +466,13 @@ public class UnifiedReportService(
     /// </summary>
     public async Task<Report> ApproveByStateLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
-        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
-            ?? throw new InvalidOperationException($"Report {reportId} not found.");
+        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct) ?? throw new InvalidOperationException($"Report {reportId} not found.");
         if (!_access.CanReviewAtStateLevel(actor, report.StateId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to approve this report at state level.");
-        }
-
+        
         if (report.Status != ReportStatus.SubmittedToState)
-        {
             throw new InvalidOperationException($"Report must be in {ReportStatus.SubmittedToState} state for state approval.");
-        }
-
+        
         report.Status = ReportStatus.SubmittedToNational;
         report.ApprovedByStateAt = DateTime.UtcNow;
         report.ApprovedByStateMemberId = actor.MemberId;
@@ -553,18 +497,14 @@ public class UnifiedReportService(
     /// </summary>
     public async Task<Report> RejectByStateLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
-        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
-            ?? throw new InvalidOperationException($"Report {reportId} not found.");
+        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)  ?? throw new InvalidOperationException($"Report {reportId} not found.");
+
         if (!_access.CanReviewAtStateLevel(actor, report.StateId))
-        {
             throw new UnauthorizedAccessException("You are not allowed to reject this report at state level.");
-        }
-
+        
         if (report.Status != ReportStatus.SubmittedToState)
-        {
             throw new InvalidOperationException($"Report must be in {ReportStatus.SubmittedToState} state for state rejection.");
-        }
-
+        
         report.Status = ReportStatus.RejectedByState;
         report.StateNotes = notes;
         report.UpdatedAt = DateTime.UtcNow;
@@ -588,18 +528,14 @@ public class UnifiedReportService(
     public async Task<Report> AcknowledgeByNationalAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         if (!_access.IsNationalLeadership(actor))
-        {
             throw new UnauthorizedAccessException("Only national leadership can acknowledge reports.");
-        }
+        
 
-        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
-            ?? throw new InvalidOperationException($"Report {reportId} not found.");
+        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct) ?? throw new InvalidOperationException($"Report {reportId} not found.");
 
         if (report.Status != ReportStatus.SubmittedToNational)
-        {
             throw new InvalidOperationException($"Report must be in {ReportStatus.SubmittedToNational} state for national acknowledgment.");
-        }
-
+        
         report.Status = ReportStatus.Acknowledged;
         report.AcknowledgedByNationalAt = DateTime.UtcNow;
         report.AcknowledgedByNationalMemberId = actor.MemberId;
@@ -654,10 +590,8 @@ public class UnifiedReportService(
             .FirstOrDefaultAsync(ct);
 
         if (existing is not null)
-        {
             return existing;
-        }
-
+        
         var cycle = new ReportingCycle
         {
             CycleMonth = monthStart.ToString("MMMM yyyy"),
@@ -680,8 +614,7 @@ public class UnifiedReportService(
     /// </summary>
     public async Task EnsureCycleOpenForEditsAsync(int cycleId, CancellationToken ct = default)
     {
-        var cycle = await _db.ReportingCycles.FirstOrDefaultAsync(c => c.Id == cycleId, ct)
-            ?? throw new InvalidOperationException($"Reporting cycle {cycleId} was not found.");
+        var cycle = await _db.ReportingCycles.FirstOrDefaultAsync(c => c.Id == cycleId, ct)?? throw new InvalidOperationException($"Reporting cycle {cycleId} was not found.");
 
         var isPastDeadline = DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
         if (isPastDeadline && !cycle.IsLocked)
@@ -692,10 +625,7 @@ public class UnifiedReportService(
         }
 
         if (cycle.IsLocked || isPastDeadline)
-        {
-            throw new InvalidOperationException(
-                $"This reporting cycle is locked. Submission deadline was {cycle.SubmissionDeadline:MMMM d, yyyy}.");
-        }
+            throw new InvalidOperationException($"This reporting cycle is locked. Submission deadline was {cycle.SubmissionDeadline:MMMM d, yyyy}.");
     }
 
     #endregion
@@ -766,11 +696,11 @@ public class UnifiedReportService(
             .Where(r => r.Status is ReportStatus.SubmittedToState or ReportStatus.SubmittedToNational or ReportStatus.Acknowledged)
             .ToList();
 
-        stateReport.TotalUnitPresidents = allUnitReports.Count;
-        stateReport.UnitPresidentsAttended = submittedToStateOrHigher.Count;
-        stateReport.UnitPerformanceRating = stateReport.TotalUnitPresidents == 0
+        stateReport.TotalUnitReportsCount = allUnitReports.Count;
+        stateReport.UnitsAttendedTo = submittedToStateOrHigher.Count;
+        stateReport.UnitPerformanceRating = stateReport.TotalUnitReportsCount == 0
             ? 0
-            : (int)Math.Round((stateReport.UnitPresidentsAttended * 100.0) / stateReport.TotalUnitPresidents);
+            : (int)Math.Round((stateReport.UnitsAttendedTo * 100.0) / stateReport.TotalUnitReportsCount);
 
         var reportIds = allUnitReports.Select(r => r.Id).ToList();
         var departmentRows = reportIds.Count == 0
@@ -818,31 +748,30 @@ public class UnifiedReportService(
 /// Wraps UnifiedReportService with automatic user context retrieval
 /// Reduces boilerplate in components
 /// </summary>
-public class CurrentUserReportService(
-    AMSAAuthStateProvider authStateProvider,
-    UnifiedReportService reportService)
+public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,UnifiedReportService reportService)
 {
     private readonly AMSAAuthStateProvider _authStateProvider = authStateProvider;
     private readonly UnifiedReportService _reportService = reportService;
 
     #region Reporting Cycle & Draft Management
 
-    public Task<ReportingCycle> EnsureActiveCycleAsync(CancellationToken ct = default) =>
-        _reportService.EnsureActiveCycleAsync(ct);
+    public Task<ReportingCycle> EnsureActiveCycleAsync(CancellationToken ct = default) => _reportService.EnsureActiveCycleAsync(ct);
 
     /// <summary>
     /// Query-only method: retrieves the current user's draft for a cycle without creating one
     /// Returns null if no draft exists
     /// </summary>
     public Task<Report?> GetCurrentUserDraftAsync(int cycleId, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.GetDraftAsync(actor, actor.UnitId, cycleId, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.GetDraftAsync(actor, actor.UnitId, cycleId, ct));
 
     /// <summary>
     /// Ensures current user has a draft for the given cycle, creating if necessary
     /// Use when user explicitly requests to create or edit a report
     /// </summary>
     public Task<Report> CreateCurrentUserDraftAsync(int cycleId, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.EnsureDraftAsync(actor, actor.UnitId, cycleId, ct));
+        ExecuteAsCurrentUserAsync(actor =>
+            _reportService.EnsureDraftAsync(actor, actor.UnitId, cycleId, ct));
 
     /// <summary>
     /// Backward-compatible alias for explicit draft creation.
@@ -861,12 +790,7 @@ public class CurrentUserReportService(
         return report?.DepartmentReports.FirstOrDefault(d => d.Department == department);
     }
 
-    public Task<DepartmentReport> SaveDepartmentJsonAsync(
-        int reportId,
-        DepartmentType department,
-        string reportDataJson,
-        bool markSubmitted,
-        CancellationToken ct = default) =>
+    public Task<DepartmentReport> SaveDepartmentJsonAsync(int reportId,DepartmentType department,string reportDataJson,bool markSubmitted,CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor =>
             _reportService.SaveDepartmentDataAsync(reportId, department, reportDataJson, actor, markSubmitted, ct));
 
@@ -895,51 +819,63 @@ public class CurrentUserReportService(
     }
 
     public Task<Report> SubmitReportToPresidentAsync(int reportId, string? notes = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.SubmitReportToPresidentAsync(actor, reportId, notes, ct));
+        ExecuteAsCurrentUserAsync(actor =>
+            _reportService.SubmitReportToPresidentAsync(actor, reportId, notes, ct));
 
     #endregion
 
     #region Unit/State/National Report Views & Leadership Actions
 
     public Task<List<Report>> GetMyUnitReportsAsync(int? cycleId = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.GetUnitReportsAsync(actor, actor.UnitId, cycleId, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.GetUnitReportsAsync(actor, actor.UnitId, cycleId, ct));
 
     public Task<List<Report>> GetMyStateReportsAsync(int? cycleId = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.GetStateReportsAsync(actor, actor.StateId, cycleId, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.GetStateReportsAsync(actor, actor.StateId, cycleId, ct));
 
     public Task<StateReport?> GetMyStateReportAsync(int cycleId, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.GetStateReportAsync(actor, actor.StateId, cycleId, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.GetStateReportAsync(actor, actor.StateId, cycleId, ct));
 
     public Task<StateReport> CreateMyStateReportAsync(int cycleId, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.EnsureStateReportAsync(actor, actor.StateId, cycleId, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.EnsureStateReportAsync(actor, actor.StateId, cycleId, ct));
 
     public Task<StateReport> EnsureMyStateReportAsync(int cycleId, CancellationToken ct = default) =>
         CreateMyStateReportAsync(cycleId, ct);
 
     public Task<StateReport> SaveMyStateReportAsync(int stateReportId, StateReportForm form, bool markSubmitted, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.SaveStateReportAsync(actor, stateReportId, form, markSubmitted, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.SaveStateReportAsync(actor, stateReportId, form, markSubmitted, ct));
 
     public Task<List<Report>> GetNationalReportsAsync(int? cycleId = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.GetNationalReportsAsync(actor, cycleId, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.GetNationalReportsAsync(actor, cycleId, ct));
 
     #endregion
 
     #region Leadership Approval & Rejection
 
     public Task<Report> ApproveAtUnitAsync(int reportId, string? notes = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.ApproveByUnitLeadershipAsync(actor, reportId, notes, ct));
+        ExecuteAsCurrentUserAsync(actor =>
+            _reportService.ApproveByUnitLeadershipAsync(actor, reportId, notes, ct));
 
     public Task<Report> RejectAtUnitAsync(int reportId, string? notes = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.RejectByUnitLeadershipAsync(actor, reportId, notes, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.RejectByUnitLeadershipAsync(actor, reportId, notes, ct));
 
     public Task<Report> ApproveAtStateAsync(int reportId, string? notes = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.ApproveByStateLeadershipAsync(actor, reportId, notes, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.ApproveByStateLeadershipAsync(actor, reportId, notes, ct));
 
     public Task<Report> RejectAtStateAsync(int reportId, string? notes = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.RejectByStateLeadershipAsync(actor, reportId, notes, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.RejectByStateLeadershipAsync(actor, reportId, notes, ct));
 
     public Task<Report> AcknowledgeAtNationalAsync(int reportId, string? notes = null, CancellationToken ct = default) =>
-        ExecuteAsCurrentUserAsync(actor => _reportService.AcknowledgeByNationalAsync(actor, reportId, notes, ct));
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.AcknowledgeByNationalAsync(actor, reportId, notes, ct));
 
     #endregion
 
@@ -949,9 +885,7 @@ public class CurrentUserReportService(
     {
         var user = _authStateProvider.GetCurrentUser();
         if (user is null || !user.IsAuthenticated)
-        {
             throw new UnauthorizedAccessException("Login required.");
-        }
 
         return user;
     }

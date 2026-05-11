@@ -11,8 +11,8 @@ public class StateReport
     public ReportStatus Status { get; set; } = ReportStatus.Draft;
     
     // Metrics
-    public int UnitPresidentsAttended { get; set; }
-    public int TotalUnitPresidents { get; set; }
+    public int UnitsAttendedTo { get; set; }
+    public int TotalUnitReportsCount { get; set; }
     public int? UnitPerformanceRating { get; set; } // 0-100
     
     // Content
@@ -39,8 +39,8 @@ public class StateReport
 
     // Computed property
     public decimal UnitPresidentAttendanceRate => 
-        TotalUnitPresidents > 0 
-            ? (UnitPresidentsAttended * 100m / TotalUnitPresidents) 
+        TotalUnitReportsCount > 0 
+            ? (UnitsAttendedTo * 100m / TotalUnitReportsCount) 
             : 0;
 
     // Foreign keys
