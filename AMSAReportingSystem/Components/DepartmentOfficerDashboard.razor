@@ -562,7 +562,7 @@
         CurrentUser is not null &&
         (CurrentUser.IsUnitLeadership || CurrentUser.IsStateLeadership || CurrentUser.IsNationalLeadership || CurrentUser.HasSudoAccess);
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
         AllowedDepartments = GetAllowedDepartments();
         await LoadSummaryAsync();

@@ -286,7 +286,6 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         if (!_access.CanReviewAtUnitLevel(actor, unitId))
             throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
         
-
         var selectedCycleId = await ResolveCycleIdAsync(cycleId, ct);
         if (selectedCycleId is null)
             return [];
@@ -833,6 +832,9 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
     public Task<List<Report>> GetMyStateReportsAsync(int? cycleId = null, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => 
             _reportService.GetStateReportsAsync(actor, actor.StateId, cycleId, ct));
+
+    public Task<List<Report>> GetStateUnitReportsAsync(int? cycleId = null, CancellationToken ct = default) =>
+        GetMyStateReportsAsync(cycleId, ct);
 
     public Task<StateReport?> GetMyStateReportAsync(int cycleId, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => 

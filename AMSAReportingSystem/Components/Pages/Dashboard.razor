@@ -17,25 +17,23 @@ else
         <p class="text-muted">@GetRoleDescription()</p>
     </div>
 
-    @if (CurrentUser.GetDashboard() == "NationalDashboard")
+    @switch (DashboardKindValue)
     {
-        <NationalDashboard CurrentUser="@CurrentUser" />
-    }
-    else if (CurrentUser.GetDashboard() == "StateDashboard")
-    {
-        <StateGSDashboard CurrentUser="@CurrentUser" />
-    }
-    else if (CurrentUser.IsUnitLeadership)
-    {
-        <UnitPresidentDashboard CurrentUser="@CurrentUser" />
-    }
-    else if (CurrentUser.GetDashboard() == "UnitDashboard")
-    {
-        <DepartmentOfficerDashboard CurrentUser="@CurrentUser" />
-    }
-    else
-    {
-        <div class="alert alert-warning">Your role is not yet configured for this system.</div>
+        case DashboardKind.NationalLeadership:
+            <NationalLeadershipDashboard CurrentUser="@CurrentUser" />
+            break;
+        case DashboardKind.StateLeadership:
+            <StateLeadershipDashboard CurrentUser="@CurrentUser" />
+            break;
+        case DashboardKind.UnitLeadership:
+            <UnitLeadershipDashboard CurrentUser="@CurrentUser" />
+            break;
+        case DashboardKind.DepartmentOfficer:
+            <DepartmentOfficerDashboard CurrentUser="@CurrentUser" />
+            break;
+        default:
+            <div class="alert alert-warning">Your role is not yet configured for this system.</div>
+            break;
     }
 }
 
@@ -61,7 +59,17 @@ else
 </style>
 
 @code {
+    private enum DashboardKind
+    {
+        Unknown,
+        NationalLeadership,
+        StateLeadership,
+        UnitLeadership,
+        DepartmentOfficer
+    }
+
     private AuthContext? CurrentUser;
+    private DashboardKind DashboardKindValue = DashboardKind.Unknown;
 
     protected override async Task OnInitializedAsync()
     {
@@ -70,21 +78,40 @@ else
         if (CurrentUser == null)
         {
             Nav.NavigateTo("/login", forceLoad: true);
+            return;
         }
+
+        DashboardKindValue = ResolveDashboardKind(CurrentUser);
     }
 
-    private string GetRoleDescription()
+    private string GetRoleDescription() => DashboardKindValue switch
     {
-        if (CurrentUser is null)
-            return "User";
-        if (CurrentUser.IsNationalLeadership)
-            return "National Leadership";
-        if (CurrentUser.IsStateLeadership)
-            return "State Leadership";
-        if (CurrentUser.IsUnitLeadership)
-            return "Unit Leadership";
-        if (CurrentUser.ParsedRoles.Any(role => role.LevelType == LevelType.Unit))
-            return "Department Officer";
-        return "User";
+        DashboardKind.NationalLeadership => "National Leadership",
+        DashboardKind.StateLeadership => "State Leadership",
+        DashboardKind.UnitLeadership => "Unit Leadership",
+        DashboardKind.DepartmentOfficer => "Department Officer",
+        _ => "User"
+    };
+
+    private static DashboardKind ResolveDashboardKind(AuthContext user)
+    {
+        if (user.IsNationalLeadership)
+        {
+            return DashboardKind.NationalLeadership;
+        }
+
+        if (user.IsStateLeadership)
+        {
+            return DashboardKind.StateLeadership;
+        }
+
+        if (user.IsUnitLeadership)
+        {
+            return DashboardKind.UnitLeadership;
+        }
+
+        return user.GetDashboard() == "UnitDashboard"
+            ? DashboardKind.DepartmentOfficer
+            : DashboardKind.Unknown;
     }
 }

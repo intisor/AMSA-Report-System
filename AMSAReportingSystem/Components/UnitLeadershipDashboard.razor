@@ -131,9 +131,9 @@
     {
         try
         {
-            await CurrentUserReportService.ApproveAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            var updated = await CurrentUserReportService.ApproveAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            ReplaceReport(updated);
             SetMessage($"Report #{reportId} approved and forwarded to state.", true);
-            await LoadAsync();
         }
         catch (Exception ex)
         {
@@ -145,13 +145,31 @@
     {
         try
         {
-            await CurrentUserReportService.RejectAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            var updated = await CurrentUserReportService.RejectAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            ReplaceReport(updated);
             SetMessage($"Report #{reportId} rejected to unit officer(s).", true);
-            await LoadAsync();
         }
         catch (Exception ex)
         {
             SetMessage(ex.Message, false);
+        }
+    }
+
+    private void ReplaceReport(Report updated)
+    {
+        var index = Reports.FindIndex(r => r.Id == updated.Id);
+        if (index >= 0)
+        {
+            Reports[index] = updated;
+        }
+        else
+        {
+            Reports.Add(updated);
+        }
+
+        if (!NotesByReport.ContainsKey(updated.Id))
+        {
+            NotesByReport[updated.Id] = string.Empty;
         }
     }
 

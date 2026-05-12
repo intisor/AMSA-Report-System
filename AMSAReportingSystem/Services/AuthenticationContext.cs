@@ -3,6 +3,25 @@ using AMSAReportingSystem.Data.Entities;
 namespace AMSAReportingSystem.Services;
 
 /// <summary>
+/// Dashboard role for UI routing and authorization
+/// Represents the primary dashboard a user should access
+/// </summary>
+public enum DashboardRole
+{
+    /// <summary>National leadership dashboard</summary>
+    National,
+
+    /// <summary>State leadership dashboard</summary>
+    State,
+
+    /// <summary>Unit leadership dashboard (unit president level)</summary>
+    UnitLeadership,
+
+    /// <summary>Department officer dashboard (regular unit members)</summary>
+    DepartmentOfficer
+}
+
+/// <summary>
 /// Authentication context containing member details and JWT token
 /// Maps from AMSA API member response to Reporting System user context
 /// Separated from AmSaAuthService for single responsibility
@@ -169,22 +188,7 @@ public class AuthContext
             .Replace("-", string.Empty)
             .Replace("/", string.Empty);
 
-        return normalized switch
-        {
-            "secondaryschool" => "secondaryschool",
-            "generalsecretary" => "general",
-            "assistantfinance" => "finance",
-            "assistantgeneral" => "general",
-            "assistanthealth" => "health",
-            "assistantpublicity" => "publicity",
-            "assistantsecondaryschool" => "secondaryschool",
-            "assistantsport" => "sport",
-            "assistanttabligh" => "tabligh",
-            "assistanttajneed" => "tajneed",
-            "assistanttaleem" => "taleem",
-            "assistantwelfare" => "welfare",
-            _ => normalized
-        };
+        return normalized;
     }
 
     /// <summary>

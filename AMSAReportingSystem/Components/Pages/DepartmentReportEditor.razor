@@ -252,7 +252,7 @@
     private bool DisableActions => IsSaving || IsCycleLocked;
     private bool HasOnCampusActivityPreview => Tabligh.ActivitiesDetails?.Contains("campus", StringComparison.OrdinalIgnoreCase) == true;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
         if (!TryMapDepartment(DepartmentSlug, out _department))
         {

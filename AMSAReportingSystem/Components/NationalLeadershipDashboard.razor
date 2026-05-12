@@ -127,13 +127,31 @@
     {
         try
         {
-            await CurrentUserReportService.AcknowledgeAtNationalAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            var updated = await CurrentUserReportService.AcknowledgeAtNationalAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            ReplaceReport(updated);
             SetMessage($"Report #{reportId} acknowledged by national leadership.", true);
-            await LoadAsync();
         }
         catch (Exception ex)
         {
             SetMessage(ex.Message, false);
+        }
+    }
+
+    private void ReplaceReport(Report updated)
+    {
+        var index = Reports.FindIndex(r => r.Id == updated.Id);
+        if (index >= 0)
+        {
+            Reports[index] = updated;
+        }
+        else
+        {
+            Reports.Add(updated);
+        }
+
+        if (!NotesByReport.ContainsKey(updated.Id))
+        {
+            NotesByReport[updated.Id] = string.Empty;
         }
     }
 
@@ -176,3 +194,4 @@
         _ => "bg-secondary"
     };
 }
+
