@@ -300,6 +300,24 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     }
 
     /// <summary>
+    /// Retrieves all reports for a unit across all cycles for read-only retrieval
+    /// </summary>
+    public async Task<List<Report>> GetUnitReportHistoryAsync(AuthContext actor, int unitId, CancellationToken ct = default)
+    {
+        if (!_access.CanReviewAtUnitLevel(actor, unitId))
+            throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
+
+        return await _db.Reports
+            .Include(r => r.Cycle)
+            .Include(r => r.DepartmentReports)
+            .Include(r => r.ActivityLogs)
+            .Where(r => r.UnitId == unitId)
+            .OrderByDescending(r => r.Cycle.StartDate)
+            .ThenByDescending(r => r.UpdatedAt)
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
     /// Retrieves all reports for a state with optional cycle filter
     /// </summary>
     public async Task<List<Report>> GetStateReportsAsync(AuthContext actor, int stateId, int? cycleId = null, CancellationToken ct = default)
@@ -703,7 +721,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
 
         var reportIds = allUnitReports.Select(r => r.Id).ToList();
         var departmentRows = reportIds.Count == 0
-            ? []
+            ? new List<DepartmentReport>()
             : await _db.DepartmentReports
                 .AsNoTracking()
                 .Where(dr => reportIds.Contains(dr.ReportId) && dr.IsSubmitted)
@@ -714,10 +732,14 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
             .OrderBy(g => g.Key.ToString())
             .ToList();
 
+        // Remove only previously auto-aggregated program rows so manual edits are preserved
         var existingPrograms = await _db.StateReportPrograms
             .Where(p => p.StateReportId == stateReport.Id)
             .ToListAsync(ct);
-        _db.StateReportPrograms.RemoveRange(existingPrograms);
+
+        var autoExisting = existingPrograms.Where(p => p.IsAutoAggregated).ToList();
+        if (autoExisting.Count > 0)
+            _db.StateReportPrograms.RemoveRange(autoExisting);
 
         var aggregatePrograms = groupedByDepartment.Select(group => new StateReportProgram
         {
@@ -726,13 +748,21 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
             Objectives = "Auto-aggregated from submitted unit department reports.",
             Outcomes = $"Submitted unit reports: {group.Count()}",
             TotalAttendance = group.Sum(x => x.AttendanceCount ?? x.MemberParticipantCount ?? 0),
-            TotalBeneficiaries = group.Sum(x => x.BeneficiaryCount ?? 0)
+            TotalBeneficiaries = group.Sum(x => x.BeneficiaryCount ?? 0),
+            IsAutoAggregated = true
         }).ToList();
 
         if (aggregatePrograms.Count > 0)
         {
             _db.StateReportPrograms.AddRange(aggregatePrograms);
         }
+
+        // mark aggregation metadata and persist
+        stateReport.IsAggregated = true;
+        stateReport.LastAggregatedAt = DateTime.UtcNow;
+        stateReport.UpdatedAt = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
     }
 
     #endregion
@@ -792,6 +822,41 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
     public Task<DepartmentReport> SaveDepartmentJsonAsync(int reportId,DepartmentType department,string reportDataJson,bool markSubmitted,CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor =>
             _reportService.SaveDepartmentDataAsync(reportId, department, reportDataJson, actor, markSubmitted, ct));
+
+    #endregion
+
+    #region Report Retrieval
+
+    public async Task<List<ReportRetrievalSummary>> GetCurrentUserReportHistoryAsync(CancellationToken ct = default)
+    {
+        var actor = GetCurrentUserOrThrow();
+        var reports = await _reportService.GetUnitReportHistoryAsync(actor, actor.UnitId, ct);
+        return [.. reports.Select(MapReportSummary)];
+    }
+
+    public async Task<ReportRetrievalDetails?> GetReportDetailsAsync(int reportId, CancellationToken ct = default)
+    {
+        var actor = GetCurrentUserOrThrow();
+        var report = await _reportService.GetReportAsync(reportId, ct);
+        if (report is null)
+        {
+            return null;
+        }
+
+        var access = new ReportAccessService();
+        var canView = report.UnitId == actor.UnitId
+            || access.CanReviewAtUnitLevel(actor, report.UnitId)
+            || access.CanReviewAtStateLevel(actor, report.StateId)
+            || access.IsNationalLeadership(actor)
+            || actor.HasSudoAccess;
+
+        if (!canView)
+        {
+            throw new UnauthorizedAccessException("You are not allowed to view this report.");
+        }
+
+        return MapReportDetails(report);
+    }
 
     #endregion
 
@@ -882,6 +947,35 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
     #endregion
 
     #region Private Helpers
+
+    private static ReportRetrievalSummary MapReportSummary(Report report) =>
+        new(
+            report.Id,
+            report.Cycle?.CycleMonth ?? $"Cycle {report.CycleId}",
+            report.Status,
+            report.CreatedAt,
+            report.UpdatedAt,
+            report.SubmittedToPresidentAt,
+            report.DepartmentReports.Count,
+            report.DepartmentReports.Count(d => d.IsSubmitted));
+
+    private static ReportRetrievalDetails MapReportDetails(Report report) =>
+        new(
+            report.Id,
+            report.Cycle?.CycleMonth ?? $"Cycle {report.CycleId}",
+            report.Status,
+            report.CreatedAt,
+            report.UpdatedAt,
+            report.SubmittedToPresidentAt,
+            report.PresidentialNotes,
+            report.StateNotes,
+            report.NationalNotes,
+            [.. report.DepartmentReports
+                .OrderBy(d => d.Department)
+                .Select(d => new ReportDepartmentView(d.Department, d.Department.ToString(), d.IsSubmitted, d.SubmittedAt, d.ReportData))],
+            [.. report.ActivityLogs
+                .OrderByDescending(log => log.ActionAt)
+                .Select(log => new ReportActivityView(log.ActionAt, log.Action, log.Notes))]);
 
     private AuthContext GetCurrentUserOrThrow()
     {

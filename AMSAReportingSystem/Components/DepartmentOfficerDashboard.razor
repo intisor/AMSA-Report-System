@@ -130,6 +130,149 @@
             @RenderAcknowledgedState()
             break;
     }
+
+    <div class="row mt-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-journal-text me-2"></i>Report History</h6>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="ReloadReportHistoryAsync" disabled="@IsRetrievalLoading">
+                        Refresh
+                    </button>
+                </div>
+                <div class="card-body" style="max-height: 420px; overflow-y: auto;">
+                    @if (IsRetrievalLoading)
+                    {
+                        <div class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                            Loading reports...
+                        </div>
+                    }
+                    else if (ReportHistory.Count == 0)
+                    {
+                        <p class="text-muted text-center mb-0">No reports available.</p>
+                    }
+                    else
+                    {
+                        <div class="section-selector">
+                            @foreach (var report in ReportHistory)
+                            {
+                                <div class="section-card @(SelectedReport?.ReportId == report.ReportId ? "submitted" : string.Empty)">
+                                    <div class="section-icon">
+                                        <i class="bi bi-file-earmark-text"></i>
+                                    </div>
+                                    <div class="section-info">
+                                        <h6>@report.CycleLabel</h6>
+                                        <p>@report.Status</p>
+                                        <small class="status-badge @(GetReportStatusBadgeClass(report.Status))">
+                                            @report.SubmittedDepartments/@report.TotalDepartments submitted
+                                        </small>
+                                    </div>
+                                    <button class="btn btn-primary btn-sm" @onclick="() => ViewReportAsync(report.ReportId)">
+                                        <i class="bi bi-eye me-1"></i> View
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0"><i class="bi bi-file-earmark-lock me-2"></i>Read Only Report</h6>
+                    @if (SelectedReport is not null)
+                    {
+                        <small class="text-muted">@SelectedReport.CycleLabel</small>
+                    }
+                </div>
+                <div class="card-body">
+                    @if (IsSelectedReportLoading)
+                    {
+                        <div class="alert alert-info mb-0">Loading report details...</div>
+                    }
+                    else if (SelectedReport is null)
+                    {
+                        <div class="empty-state py-5">
+                            <div class="empty-state-icon">
+                                <i class="bi bi-folder2-open"></i>
+                            </div>
+                            <h4 class="empty-state-title">Select a report</h4>
+                            <p class="empty-state-text mb-0">Choose a report from history to view its submitted data and activity.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+                            <span class="badge bg-secondary">@SelectedReport.Status</span>
+                            <span class="badge bg-light text-dark">Created @SelectedReport.CreatedAt.ToString("MMM d, yyyy")</span>
+                            @if (SelectedReport.SubmittedAt.HasValue)
+                            {
+                                <span class="badge bg-info text-white">Submitted @SelectedReport.SubmittedAt.Value.ToString("MMM d, yyyy")</span>
+                            }
+                        </div>
+
+                        @if (SelectedReportDetails is not null)
+                        {
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="info-box">
+                                        <div class="info-label text-muted">Departments</div>
+                                        <div class="info-value">@SelectedReportDetails.Departments.Count</div>
+                                        <div class="info-subtext">@SelectedReportDetails.Departments.Count(d => d.IsSubmitted) submitted</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="info-box">
+                                        <div class="info-label text-muted">Activity Items</div>
+                                        <div class="info-value">@SelectedReportDetails.ActivityLogs.Count</div>
+                                        <div class="info-subtext">Most recent actions</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr />
+
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <h6>Department Data</h6>
+                                    <div class="small">
+                                        @foreach (var department in SelectedReportDetails.Departments)
+                                        {
+                                            <div class="d-flex justify-content-between border-bottom py-2">
+                                                <span>@department.DepartmentName</span>
+                                                <span class="badge @(department.IsSubmitted ? "bg-success" : "bg-warning text-dark")">
+                                                    @(department.IsSubmitted ? "Submitted" : "Draft")
+                                                </span>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Activity Log</h6>
+                                    <div class="activity-timeline" style="max-height: 260px; overflow-y: auto;">
+                                        @foreach (var activity in SelectedReportDetails.ActivityLogs)
+                                        {
+                                            <div class="activity-item">
+                                                <div class="activity-time">@activity.At.ToString("MMM d, h:mm tt")</div>
+                                                <div class="activity-message">@ToReadableActivity(activity.Action)</div>
+                                                @if (!string.IsNullOrWhiteSpace(activity.Notes))
+                                                {
+                                                    <div class="text-muted small">@activity.Notes</div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Create Report Modal -->
@@ -547,7 +690,12 @@
     private Report? CurrentReport { get; set; }
     private ReportingCycle? CurrentCycle { get; set; }
     private List<ActivityItem> RecentActivity { get; set; } = new();
+    private List<ReportRetrievalSummary> ReportHistory { get; set; } = new();
+    private ReportRetrievalSummary? SelectedReport { get; set; }
+    private ReportRetrievalDetails? SelectedReportDetails { get; set; }
     private bool IsLoading { get; set; }
+    private bool IsRetrievalLoading { get; set; }
+    private bool IsSelectedReportLoading { get; set; }
     private string? ErrorMessage { get; set; }
     private string? SuccessMessage { get; set; }
     private string? SubmissionNotes { get; set; }
@@ -566,6 +714,7 @@
     {
         AllowedDepartments = GetAllowedDepartments();
         await LoadSummaryAsync();
+        await ReloadReportHistoryAsync();
     }
 
     private async Task LoadSummaryAsync()
@@ -619,6 +768,52 @@
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private async Task ReloadReportHistoryAsync()
+    {
+        if (CurrentUser is null || !CurrentUser.IsAuthenticated)
+            return;
+
+        IsRetrievalLoading = true;
+
+        try
+        {
+            ReportHistory = (await CurrentUserReportService.GetCurrentUserReportHistoryAsync()).ToList();
+            if (SelectedReport is not null && ReportHistory.All(report => report.ReportId != SelectedReport.ReportId))
+            {
+                SelectedReport = null;
+                SelectedReportDetails = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading report history: {ex.Message}";
+        }
+        finally
+        {
+            IsRetrievalLoading = false;
+        }
+    }
+
+    private async Task ViewReportAsync(int reportId)
+    {
+        IsSelectedReportLoading = true;
+        SelectedReport = ReportHistory.FirstOrDefault(report => report.ReportId == reportId);
+        SelectedReportDetails = null;
+
+        try
+        {
+            SelectedReportDetails = await CurrentUserReportService.GetReportDetailsAsync(reportId);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error loading report details: {ex.Message}";
+        }
+        finally
+        {
+            IsSelectedReportLoading = false;
         }
     }
 
@@ -686,6 +881,15 @@
     private void CloseCreateReportModal() => IsCreateReportModalOpen = false;
     private void OpenSubmitReportModal() => IsSubmitReportModalOpen = true;
     private void CloseSubmitReportModal() => IsSubmitReportModalOpen = false;
+
+    private static string GetReportStatusBadgeClass(ReportStatus status) => status switch
+    {
+        ReportStatus.Draft => "draft",
+        ReportStatus.SubmittedToPresident or ReportStatus.SubmittedToState or ReportStatus.SubmittedToNational => "submitted",
+        ReportStatus.RejectedByPresident or ReportStatus.RejectedByState => "draft",
+        ReportStatus.Acknowledged => "submitted",
+        _ => "draft"
+    };
 
     private List<DepartmentType> GetAllowedDepartments()
     {
@@ -894,7 +1098,7 @@
 
                 <div class="card state-card draft shadow-sm">
                     <div class="card-header bg-light">
-                        <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i> Recent Activity</h6>
+                        <h6 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Activity</h6>
                     </div>
                     <div class="card-body" style="max-height: 350px; overflow-y: auto;">
                         @if (RecentActivity.Count == 0)

@@ -113,6 +113,42 @@ public sealed class StateProgramForm
 
 #endregion
 
+#region Report Retrieval Models
+
+public sealed record ReportActivityView(DateTime At, string Action, string? Notes);
+
+public sealed record ReportDepartmentView(
+    DepartmentType Department,
+    string DepartmentName,
+    bool IsSubmitted,
+    DateTime? SubmittedAt,
+    string? ReportDataJson);
+
+public sealed record ReportRetrievalSummary(
+    int ReportId,
+    string CycleLabel,
+    ReportStatus Status,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    DateTime? SubmittedAt,
+    int TotalDepartments,
+    int SubmittedDepartments);
+
+public sealed record ReportRetrievalDetails(
+    int ReportId,
+    string CycleLabel,
+    ReportStatus Status,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    DateTime? SubmittedAt,
+    string? PresidentialNotes,
+    string? StateNotes,
+    string? NationalNotes,
+    IReadOnlyList<ReportDepartmentView> Departments,
+    IReadOnlyList<ReportActivityView> ActivityLogs);
+
+#endregion
+
 #region Form Serialization & Deserialization
 
 /// <summary>

@@ -34,6 +34,12 @@ public class StateReport
     // Submission tracking
     public DateTime? SubmittedAt { get; set; }
     public int? SubmittedByMemberId { get; set; }
+
+    // Aggregation metadata
+    public bool IsAggregated { get; set; } = false;
+    public DateTime? LastAggregatedAt { get; set; }
+    public int? LastAggregatedByMemberId { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -62,6 +68,9 @@ public class StateReportProgram
     public string? Outcomes { get; set; }
     public int? TotalAttendance { get; set; }
     public int? TotalBeneficiaries { get; set; }
+
+    // Aggregation source flag - true when row was created by auto-aggregation
+    public bool IsAutoAggregated { get; set; } = true;
 
     // Foreign key
     public StateReport StateReport { get; set; } = null!;
