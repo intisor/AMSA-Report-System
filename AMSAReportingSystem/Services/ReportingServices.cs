@@ -363,6 +363,101 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     }
 
     /// <summary>
+    /// Retrieves all reports nationally WITH state leadership context
+    /// Combines Report + StateReport so National sees state's commentary, challenges, plans
+    /// National leadership only
+    /// </summary>
+    public async Task<List<ReportWithStateContext>> GetNationalReportsWithStateContextAsync(AuthContext actor, int? cycleId = null, CancellationToken ct = default)
+    {
+        if (!_access.IsNationalLeadership(actor))
+            throw new UnauthorizedAccessException("Only national leadership can view national report board.");
+
+        var selectedCycleId = await ResolveCycleIdAsync(cycleId, ct);
+        if (selectedCycleId is null)
+            return [];
+
+        var reports = await _db.Reports
+            .Include(r => r.Cycle)
+            .Include(r => r.DepartmentReports)
+            .Include(r => r.ActivityLogs)
+            .Where(r => r.CycleId == selectedCycleId.Value)
+            .OrderBy(r => r.StateId)
+            .ThenBy(r => r.UnitId)
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        var result = new List<ReportWithStateContext>();
+
+        foreach (var report in reports)
+        {
+            // Get state report context for this state+cycle
+            var stateReport = await _db.StateReports
+                .Include(sr => sr.Programs)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(sr => sr.StateId == report.StateId && sr.CycleId == selectedCycleId.Value, ct);
+
+            // Map to composite DTO
+            var reportWithContext = new ReportWithStateContext(
+                ReportId: report.Id,
+                UnitId: report.UnitId,
+                StateId: report.StateId,
+                CycleLabel: report.Cycle?.CycleMonth ?? $"Cycle {report.CycleId}",
+                Status: report.Status,
+                CreatedAt: report.CreatedAt,
+                UpdatedAt: report.UpdatedAt,
+                SubmittedToPresidentAt: report.SubmittedToPresidentAt,
+                ApprovedByPresidentAt: report.ApprovedByPresidentAt,
+                PresidentialNotes: report.PresidentialNotes,
+                ApprovedByStateAt: report.ApprovedByStateAt,
+                StateNotes: report.StateNotes,
+                AcknowledgedByNationalAt: report.AcknowledgedByNationalAt,
+                NationalNotes: report.NationalNotes,
+                
+                // State context (nullable - state may not have created a state report yet)
+                StateContext: stateReport is null ? null : new StateReportContext(
+                    StateReportId: stateReport.Id,
+                    CycleLabel: report.Cycle?.CycleMonth ?? $"Cycle {stateReport.CycleId}",
+                    UnitsAttendedTo: stateReport.UnitsAttendedTo,
+                    TotalUnitReportsCount: stateReport.TotalUnitReportsCount,
+                    UnitPerformanceRating: stateReport.UnitPerformanceRating,
+                    UnitPresidentAttendanceRate: stateReport.UnitPresidentAttendanceRate,
+                    UnitImprovementPlan: stateReport.UnitImprovementPlan,
+                    ChallengesFaced: stateReport.ChallengesFaced,
+                    NationalSupportNeeded: stateReport.NationalSupportNeeded,
+                    OtherNotes: stateReport.OtherNotes,
+                    PresidentialNote: stateReport.PresidentialNote,
+                    ApprovedByPresidentAt: stateReport.ApprovedByPresidentAt,
+                    NationalNote: stateReport.NationalNote,
+                    AcknowledgedByNationalAt: stateReport.AcknowledgedByNationalAt,
+                    IsAggregated: stateReport.IsAggregated,
+                    LastAggregatedAt: stateReport.LastAggregatedAt,
+                    Programs: [.. stateReport.Programs
+                        .Select(p => new StateReportProgramView(
+                            p.ProgramId,
+                            p.ProgramName,
+                            p.Objectives,
+                            p.Outcomes,
+                            p.TotalAttendance,
+                            p.TotalBeneficiaries,
+                            p.IsAutoAggregated))]),
+                
+                // Department data
+                Departments: [.. report.DepartmentReports
+                    .OrderBy(d => d.Department)
+                    .Select(d => new ReportDepartmentView(d.Department, d.Department.ToString(), d.IsSubmitted, d.SubmittedAt, d.ReportData))],
+                
+                // Activity logs
+                ActivityLogs: [.. report.ActivityLogs
+                    .OrderByDescending(log => log.ActionAt)
+                    .Select(log => new ReportActivityView(log.ActionAt, log.Action, log.Notes))]);
+
+            result.Add(reportWithContext);
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Submits report from unit to president for review
     /// At least one departments must be submitted first
     /// </summary>
@@ -667,19 +762,15 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     private static void ValidateStateReportForm(StateReportForm form)
     {
         if (form.UnitPresidentsAttended < 0 || form.TotalUnitPresidents < 0)
-        {
             throw new InvalidOperationException("Attendance values cannot be negative.");
-        }
+        
 
         if (form.UnitPresidentsAttended > form.TotalUnitPresidents)
-        {
             throw new InvalidOperationException("Unit presidents attended cannot exceed total unit presidents.");
-        }
-
+        
         if (form.UnitPerformanceRating is < 0 or > 100)
-        {
             throw new InvalidOperationException("Unit performance rating must be between 0 and 100.");
-        }
+        
 
         foreach (var program in form.Programs)
         {
@@ -839,10 +930,8 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
         var actor = GetCurrentUserOrThrow();
         var report = await _reportService.GetReportAsync(reportId, ct);
         if (report is null)
-        {
             return null;
-        }
-
+        
         var access = new ReportAccessService();
         var canView = report.UnitId == actor.UnitId
             || access.CanReviewAtUnitLevel(actor, report.UnitId)
@@ -851,9 +940,8 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
             || actor.HasSudoAccess;
 
         if (!canView)
-        {
             throw new UnauthorizedAccessException("You are not allowed to view this report.");
-        }
+        
 
         return MapReportDetails(report);
     }
