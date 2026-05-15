@@ -21,10 +21,10 @@
         }
 
         <div class="row mb-3">
-            <div class="col-md-3"><strong>Total:</strong> @Reports.Count</div>
-            <div class="col-md-3"><strong>Awaiting National:</strong> @Reports.Count(r => r.Status == ReportStatus.SubmittedToNational)</div>
-            <div class="col-md-3"><strong>Acknowledged:</strong> @Reports.Count(r => r.Status == ReportStatus.Acknowledged)</div>
-            <div class="col-md-3"><strong>States:</strong> @Reports.Select(r => r.StateId).Distinct().Count()</div>
+            <div class="col-md-3"><strong>Total:</strong> @ReportsWithContext.Count</div>
+            <div class="col-md-3"><strong>Awaiting National:</strong> @ReportsWithContext.Count(r => r.Status == ReportStatus.SubmittedToNational)</div>
+            <div class="col-md-3"><strong>Acknowledged:</strong> @ReportsWithContext.Count(r => r.Status == ReportStatus.Acknowledged)</div>
+            <div class="col-md-3"><strong>States:</strong> @ReportsWithContext.Select(r => r.StateId).Distinct().Count()</div>
         </div>
 
         <div class="card">
@@ -39,18 +39,19 @@
                             <th>Unit</th>
                             <th>Status</th>
                             <th>Forwarded By State</th>
+                            <th>State Context</th>
                             <th style="min-width: 260px;">National Note</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @if (Reports.Count == 0)
+                        @if (ReportsWithContext.Count == 0)
                         {
-                            <tr><td colspan="6" class="text-center text-muted py-4">No national reports found in this cycle.</td></tr>
+                            <tr><td colspan="7" class="text-center text-muted py-4">No national reports found in this cycle.</td></tr>
                         }
                         else
                         {
-                            @foreach (var report in Reports)
+                            @foreach (var report in ReportsWithContext)
                             {
                                 <tr>
                                     <td>@GetStateName(report.StateId)</td>
@@ -58,14 +59,26 @@
                                     <td><span class="badge @GetStatusBadge(report.Status)">@report.Status</span></td>
                                     <td>@(report.ApprovedByStateAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
                                     <td>
+                                        @if (report.StateContext is not null)
+                                        {
+                                            <span class="badge bg-info">State reviewed</span>
+                                            <br />
+                                            <small class="text-muted">Units: @report.StateContext.UnitsAttendedTo/@report.StateContext.TotalUnitReportsCount</small>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">No state context</span>
+                                        }
+                                    </td>
+                                    <td>
                                         <input class="form-control form-control-sm"
                                                placeholder="Optional national note"
-                                               @bind="NotesByReport[report.Id]" />
+                                               @bind="NotesByReport[report.ReportId]" />
                                     </td>
                                     <td>
                                         @if (report.Status == ReportStatus.SubmittedToNational)
                                         {
-                                            <button class="btn btn-sm btn-success" @onclick="() => Acknowledge(report.Id)">
+                                            <button class="btn btn-sm btn-success" @onclick="() => Acknowledge(report.ReportId)">
                                                 Acknowledge
                                             </button>
                                         }
@@ -92,7 +105,7 @@
     private string CycleLabel = "Active Cycle";
     private string? Message;
     private string MessageClass = "alert-info";
-    private List<Report> Reports = new();
+    private List<ReportWithStateContext> ReportsWithContext = new();
     private Dictionary<int, string> NotesByReport = new();
     private Dictionary<int, string> UnitNamesById = new();
     private Dictionary<int, string> StateNamesById = new();
@@ -109,8 +122,8 @@
         {
             var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
-            Reports = await CurrentUserReportService.GetNationalReportsAsync(cycle.Id);
-            NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
+            ReportsWithContext = await CurrentUserReportService.GetNationalReportsWithStateContextAsync(cycle.Id);
+            NotesByReport = ReportsWithContext.ToDictionary(r => r.ReportId, _ => string.Empty);
             await WarmReportNamesAsync();
         }
         catch (Exception ex)
@@ -139,14 +152,36 @@
 
     private void ReplaceReport(Report updated)
     {
-        var index = Reports.FindIndex(r => r.Id == updated.Id);
+        var index = ReportsWithContext.FindIndex(r => r.ReportId == updated.Id);
         if (index >= 0)
         {
-            Reports[index] = updated;
+            // Create new composite view with updated report data
+            var oldReport = ReportsWithContext[index];
+            var newReport = new ReportWithStateContext(
+                ReportId: updated.Id,
+                UnitId: updated.UnitId,
+                StateId: updated.StateId,
+                CycleLabel: oldReport.CycleLabel,
+                Status: updated.Status,
+                CreatedAt: updated.CreatedAt,
+                UpdatedAt: updated.UpdatedAt,
+                SubmittedToPresidentAt: updated.SubmittedToPresidentAt,
+                ApprovedByPresidentAt: updated.ApprovedByPresidentAt,
+                PresidentialNotes: updated.PresidentialNotes,
+                ApprovedByStateAt: updated.ApprovedByStateAt,
+                StateNotes: updated.StateNotes,
+                AcknowledgedByNationalAt: updated.AcknowledgedByNationalAt,
+                NationalNotes: updated.NationalNotes,
+                StateContext: oldReport.StateContext,
+                Departments: oldReport.Departments,
+                ActivityLogs: oldReport.ActivityLogs);
+            
+            ReportsWithContext[index] = newReport;
         }
         else
         {
-            Reports.Add(updated);
+            // If not found, reload the list
+            _ = LoadAsync();
         }
 
         if (!NotesByReport.ContainsKey(updated.Id))
@@ -169,13 +204,13 @@
 
     private async Task WarmReportNamesAsync()
     {
-        var unitIds = Reports.Select(r => r.UnitId).Distinct().ToList();
+        var unitIds = ReportsWithContext.Select(r => r.UnitId).Distinct().ToList();
         foreach (var unitId in unitIds)
         {
             UnitNamesById[unitId] = await DirectoryLookupCache.GetUnitNameAsync(unitId);
         }
 
-        var stateIds = Reports.Select(r => r.StateId).Distinct().ToList();
+        var stateIds = ReportsWithContext.Select(r => r.StateId).Distinct().ToList();
         foreach (var stateId in stateIds)
         {
             StateNamesById[stateId] = await DirectoryLookupCache.GetStateNameAsync(stateId);

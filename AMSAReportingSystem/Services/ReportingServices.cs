@@ -1008,6 +1008,10 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
         ExecuteAsCurrentUserAsync(actor => 
             _reportService.GetNationalReportsAsync(actor, cycleId, ct));
 
+    public Task<List<ReportWithStateContext>> GetNationalReportsWithStateContextAsync(int? cycleId = null, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => 
+            _reportService.GetNationalReportsWithStateContextAsync(actor, cycleId, ct));
+
     #endregion
 
     #region Leadership Approval & Rejection
