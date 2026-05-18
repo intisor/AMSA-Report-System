@@ -1,19 +1,32 @@
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: #f6f1e6;
+    color: #243026;
 }
 
 a, .btn-link {
-    color: #006bb7;
+    color: #2f6b3f;
+}
+
+a:hover, .btn-link:hover {
+    color: #1f4d2c;
 }
 
 .btn-primary {
     color: #fff;
-    background-color: #1b6ec2;
-    border-color: #1861ac;
+    background-color: #2f6b3f;
+    border-color: #1f4d2c;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    color: #fff;
+    background-color: #255730;
+    border-color: #1f4d2c;
 }
 
 .btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+  box-shadow: 0 0 0 0.1rem #fff, 0 0 0 0.25rem rgba(47, 107, 63, 0.25);
 }
 
 .content {
@@ -25,15 +38,15 @@ h1:focus {
 }
 
 .valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+    outline: 1px solid #2f6b3f;
 }
 
 .invalid {
-    outline: 1px solid #e50000;
+    outline: 1px solid #a94442;
 }
 
 .validation-message {
-    color: #e50000;
+    color: #a94442;
 }
 
 .blazor-error-boundary {
