@@ -10,7 +10,7 @@ public sealed class AmsaDirectoryLookupCacheTests
     {
         var apiClient = new Mock<IAmsaApiClient>(MockBehavior.Strict);
         apiClient.Setup(client => client.GetStateByIdAsync(10, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<Data.Entities.StateResponse>.Success(new Data.Entities.StateResponse { StateId = 10, StateName = "Kaduna" }));
+            .Returns(Task.FromResult(Result<StateResponse>.Success(new StateResponse { StateId = 10, StateName = "Kaduna" })));
         var cache = new AmsaDirectoryLookupCache(apiClient.Object);
 
         var result = await cache.GetStateNameAsync(10);
@@ -24,7 +24,7 @@ public sealed class AmsaDirectoryLookupCacheTests
     {
         var apiClient = new Mock<IAmsaApiClient>(MockBehavior.Strict);
         apiClient.Setup(client => client.GetStateByIdAsync(10, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<Data.Entities.StateResponse>.Success(new Data.Entities.StateResponse { StateId = 10, StateName = "Kaduna" }));
+            .Returns(Task.FromResult(Result<StateResponse>.Success(new StateResponse { StateId = 10, StateName = "Kaduna" })));
         var cache = new AmsaDirectoryLookupCache(apiClient.Object);
 
         var first = await cache.GetStateNameAsync(10);
@@ -40,7 +40,7 @@ public sealed class AmsaDirectoryLookupCacheTests
     {
         var apiClient = new Mock<IAmsaApiClient>(MockBehavior.Strict);
         apiClient.Setup(client => client.GetUnitByIdAsync(7, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(Result<Data.Entities.UnitResponse>.Failure("missing"));
+            .Returns(Task.FromResult(Result<UnitResponse>.Failure("missing")));
         var cache = new AmsaDirectoryLookupCache(apiClient.Object);
 
         var result = await cache.GetUnitNameAsync(7);

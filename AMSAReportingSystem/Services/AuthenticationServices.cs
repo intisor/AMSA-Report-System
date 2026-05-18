@@ -180,7 +180,7 @@ public class AMSAAuthStateProvider(AmsaAuthService authService, IJSRuntime jsRun
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        // Try to restore from session/localStorage
+        // Try to restore from session storage
         _currentUser ??= await RestoreAuthStateAsync();
 
         if (_currentUser != null && _currentUser.IsTokenValid)
@@ -244,14 +244,13 @@ public class AMSAAuthStateProvider(AmsaAuthService authService, IJSRuntime jsRun
     public AuthContext? GetCurrentUser() => _currentUser;
 
     /// <summary>
-    /// Restore auth state from persistent storage
-    /// Currently in-memory only; extend with localStorage/session as needed
+    /// Restore auth state from tab-scoped persistent storage
     /// </summary>
     private async Task<AuthContext?> RestoreAuthStateAsync()
     {
         try
         {
-            var json = await _jsRuntime.InvokeAsync<string?>("localStorage.getItem", AuthStorageKey);
+            var json = await _jsRuntime.InvokeAsync<string?>("sessionStorage.getItem", AuthStorageKey);
             if (string.IsNullOrWhiteSpace(json))
             {
                 return null;
@@ -277,7 +276,7 @@ public class AMSAAuthStateProvider(AmsaAuthService authService, IJSRuntime jsRun
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to restore auth state from local storage");
+            _logger.LogWarning(ex, "Failed to restore auth state from session storage");
             return null;
         }
     }
@@ -287,7 +286,7 @@ public class AMSAAuthStateProvider(AmsaAuthService authService, IJSRuntime jsRun
         try
         {
             var json = JsonSerializer.Serialize(context);
-            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", AuthStorageKey, json);
+            await _jsRuntime.InvokeVoidAsync("sessionStorage.setItem", AuthStorageKey, json);
         }
         catch (InvalidOperationException)
         {
@@ -303,7 +302,7 @@ public class AMSAAuthStateProvider(AmsaAuthService authService, IJSRuntime jsRun
     {
         try
         {
-            await _jsRuntime.InvokeVoidAsync("localStorage.removeItem", AuthStorageKey);
+            await _jsRuntime.InvokeVoidAsync("sessionStorage.removeItem", AuthStorageKey);
         }
         catch (InvalidOperationException)
         {

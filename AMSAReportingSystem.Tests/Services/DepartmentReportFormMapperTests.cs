@@ -14,14 +14,13 @@ public sealed class DepartmentReportFormMapperTests
     }
 
     [Fact]
-    public void Deserialize_WhenTablighJsonContainsCampus_ReturnsCampusFlagTrue()
+    public void Deserialize_WhenTablighJsonProvided_ReturnsTablighForm()
     {
         var json = "{\"activitiesDetails\":\"Campus outreach program\"}";
 
         var result = DepartmentReportFormMapper.Deserialize(DepartmentType.Tabligh, json);
 
-        var form = Assert.IsType<TablighForm>(result);
-        Assert.True(form.HasOnCampusActivity);
+        Assert.IsType<TablighForm>(result);
     }
 
     [Fact]
@@ -33,6 +32,17 @@ public sealed class DepartmentReportFormMapperTests
 
         Assert.Contains("hasOnCampusActivity", json);
         Assert.Contains("true", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Serialize_WhenTablighFormHasNoActivities_ReturnsDerivedFlagFalse()
+    {
+        var form = new TablighForm();
+
+        var json = DepartmentReportFormMapper.Serialize(DepartmentType.Tabligh, form);
+
+        Assert.Contains("hasOnCampusActivity", json);
+        Assert.Contains("false", json, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -50,6 +50,9 @@ builder.Services.AddScoped<UnifiedReportService>();
 builder.Services.AddScoped<CurrentUserReportService>();
 builder.Services.AddScoped<AmsaDirectoryLookupCache>();
 
+//     .AddRazorPages()
+//     .AddApplicationInsightsTelemetry();
+
 builder.Services.AddAuthorizationCore();
 
 var app = builder.Build();
@@ -77,3 +80,5 @@ app.MapRazorComponents<App>()
 	.AddAdditionalAssemblies(typeof(AMSAReportingSystem.Client._Imports).Assembly);
 
 app.Run();
+
+public partial class Program;
