@@ -12,20 +12,26 @@ public sealed class HostSmokeTests : IClassFixture<TestAppFactory>
     [Fact]
     public async Task GetRootPage_ReturnsSuccessfulResponse()
     {
+        // Arrange
         var client = _factory.CreateClient();
 
+        // Act
         var response = await client.GetAsync("/");
 
+        // Assert
         response.EnsureSuccessStatusCode();
     }
 
     [Fact]
     public async Task GetLoginPage_ReturnsSuccessfulResponse()
     {
+        // Arrange
         var client = _factory.CreateClient();
 
+        // Act
         var response = await client.GetAsync("/login");
 
+        // Assert
         response.EnsureSuccessStatusCode();
     }
 }

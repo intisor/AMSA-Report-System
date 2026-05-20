@@ -8,6 +8,7 @@ public sealed class StateReportFormMapperTests
     [Fact]
     public void ToForm_WhenStateReportProvided_MapsCoreProperties()
     {
+        // Arrange
         var report = new StateReport
         {
             Id = 10,
@@ -25,8 +26,10 @@ public sealed class StateReportFormMapperTests
             }
         };
 
+        // Act
         var result = StateReportFormMapper.ToForm(report);
 
+        // Assert
         Assert.Equal(10, result.StateReportId);
         Assert.Equal(7, result.UnitPresidentsAttended);
         Assert.Equal(10, result.TotalUnitPresidents);

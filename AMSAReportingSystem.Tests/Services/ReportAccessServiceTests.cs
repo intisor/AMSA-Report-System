@@ -10,100 +10,130 @@ public sealed class ReportAccessServiceTests
     [Fact]
     public void CanEditDepartment_WhenNationalLeadership_ReturnsTrue()
     {
+        // Arrange
         var actor = CreateActor(LevelType.National, "President");
 
+        // Act
         var result = _sut.CanEditDepartment(actor, unitId: 2, stateId: 3, DepartmentType.Taleem);
 
+        // Assert
         Assert.True(result);
     }
 
     [Fact]
     public void CanEditDepartment_WhenStateLeadershipOnOwnState_ReturnsTrue()
     {
+        // Arrange
         var actor = CreateActor(LevelType.State, "General Secretary", stateId: 10);
 
+        // Act
         var result = _sut.CanEditDepartment(actor, unitId: 7, stateId: 10, DepartmentType.Welfare);
 
+        // Assert
         Assert.True(result);
     }
 
     [Fact]
     public void CanEditDepartment_WhenUnitLeadershipOnOwnUnit_ReturnsTrue()
     {
+        // Arrange
         var actor = CreateActor(LevelType.Unit, "President", unitId: 5, stateId: 10);
 
+        // Act
         var result = _sut.CanEditDepartment(actor, unitId: 5, stateId: 3, DepartmentType.Sport);
 
+        // Assert
         Assert.True(result);
     }
 
     [Fact]
     public void CanEditDepartment_WhenDepartmentMatchAtUnitLevel_ReturnsTrue()
     {
+        // Arrange
         var actor = CreateActor(LevelType.Unit, "Taleem", unitId: 5, stateId: 10);
 
+        // Act
         var result = _sut.CanEditDepartment(actor, unitId: 5, stateId: 10, DepartmentType.Taleem);
 
+        // Assert
         Assert.True(result);
     }
 
     [Fact]
     public void CanEditDepartment_WhenNoRuleMatches_ReturnsFalse()
     {
+        // Arrange
         var actor = CreateActor(LevelType.Unit, "Welfare", unitId: 5, stateId: 10);
 
+        // Act
         var result = _sut.CanEditDepartment(actor, unitId: 9, stateId: 11, DepartmentType.Finance);
 
+        // Assert
         Assert.False(result);
     }
 
     [Fact]
     public void CanInitiateReportSubmission_WhenNationalLeadership_ReturnsTrue()
     {
+        // Arrange
         var actor = CreateActor(LevelType.National, "President");
 
+        // Act
         var result = _sut.CanInitiateReportSubmission(actor, unitId: 20, stateId: 30);
 
+        // Assert
         Assert.True(result);
     }
 
     [Fact]
     public void CanInitiateReportSubmission_WhenSameUnitAndStateWithUnitRole_ReturnsTrue()
     {
+        // Arrange
         var actor = CreateActor(LevelType.Unit, "Taleem", unitId: 5, stateId: 10);
 
+        // Act
         var result = _sut.CanInitiateReportSubmission(actor, unitId: 5, stateId: 10);
 
+        // Assert
         Assert.True(result);
     }
 
     [Fact]
     public void CanInitiateReportSubmission_WhenOutsideScope_ReturnsFalse()
     {
+        // Arrange
         var actor = CreateActor(LevelType.Unit, "Taleem", unitId: 5, stateId: 10);
 
+        // Act
         var result = _sut.CanInitiateReportSubmission(actor, unitId: 7, stateId: 10);
 
+        // Assert
         Assert.False(result);
     }
 
     [Fact]
     public void CanReviewAtUnitLevel_WhenUnitLeaderOnOwnUnit_ReturnsTrue()
     {
+        // Arrange
         var actor = CreateActor(LevelType.Unit, "President", unitId: 5, stateId: 10);
 
+        // Act
         var result = _sut.CanReviewAtUnitLevel(actor, unitId: 5);
 
+        // Assert
         Assert.True(result);
     }
 
     [Fact]
     public void CanReviewAtStateLevel_WhenStateLeaderOnOwnState_ReturnsTrue()
     {
+        // Arrange
         var actor = CreateActor(LevelType.State, "General Secretary", unitId: 5, stateId: 10);
 
+        // Act
         var result = _sut.CanReviewAtStateLevel(actor, stateId: 10);
 
+        // Assert
         Assert.True(result);
     }
 

@@ -12,10 +12,13 @@ public sealed class RoutingTests : IClassFixture<TestAppFactory>
     [Fact]
     public async Task GetUnknownRoute_ReturnsClientHandledResponse()
     {
+        // Arrange
         var client = _factory.CreateClient();
 
+        // Act
         var response = await client.GetAsync("/does-not-exist");
 
+        // Assert
         Assert.NotNull(response);
     }
 }

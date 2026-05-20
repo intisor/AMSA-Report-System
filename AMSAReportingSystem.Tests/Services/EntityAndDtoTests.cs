@@ -8,14 +8,17 @@ public sealed class EntityAndDtoTests
     [Fact]
     public void UnitPresidentAttendanceRate_WhenTotalIsZero_ReturnsZero()
     {
+        // Arrange
         var report = new StateReport { TotalUnitReportsCount = 0, UnitsAttendedTo = 5 };
 
+        // Act & Assert
         Assert.Equal(0m, report.UnitPresidentAttendanceRate);
     }
 
     [Fact]
     public void ReportWithStateContext_CanBeCreated()
     {
+        // Arrange & Act
         var result = new ReportWithStateContext(
             1,
             2,
@@ -35,6 +38,7 @@ public sealed class EntityAndDtoTests
             [],
             []);
 
+        // Assert
         Assert.Equal(1, result.ReportId);
     }
 }

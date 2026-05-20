@@ -8,8 +8,10 @@ public sealed class ReportDepartmentCatalogTests
     [Fact]
     public void ReportableDepartments_ContainsAllDepartmentsInExpectedOrder()
     {
+        // Arrange & Act
         var result = ReportDepartmentCatalog.ReportableDepartments;
 
+        // Assert
         Assert.Equal(new[]
         {
             DepartmentType.Taleem,

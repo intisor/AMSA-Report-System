@@ -8,49 +8,61 @@ public sealed class AuthContextTests
     [Fact]
     public void GetDisplayName_ReturnsFirstAndLastName()
     {
+        // Arrange
         var context = CreateContext();
 
+        // Act
         var result = context.GetDisplayName();
 
+        // Assert
         Assert.Equal("Test User", result);
     }
 
     [Fact]
     public void GetDashboard_WhenNationalDashboardPresent_ReturnsNationalDashboard()
     {
+        // Arrange
         var context = CreateContext();
         context.Dashboards = new List<string> { "UnitDashboard", "NationalDashboard" };
 
+        // Act
         var result = context.GetDashboard();
 
+        // Assert
         Assert.Equal("NationalDashboard", result);
     }
 
     [Fact]
     public void IsNationalLeadership_WhenNationalRoleExists_ReturnsTrue()
     {
+        // Arrange
         var context = CreateContext();
         context.ParsedRoles = new List<(string DepartmentName, LevelType LevelType)>
         {
             ("President", LevelType.National)
         };
 
+        // Act
         var result = context.IsNationalLeadership;
 
+        // Assert
         Assert.True(result);
     }
 
     [Fact]
     public void HasSudoAccess_WhenNoLeadershipRoleExists_ReturnsFalse()
     {
+        // Arrange
         var context = CreateContext();
         context.ParsedRoles = new List<(string DepartmentName, LevelType LevelType)>
         {
             ("Taleem", LevelType.Unit)
         };
 
+        // Act
         var result = context.HasSudoAccess;
 
+        // Assert
         Assert.False(result);
     }
 
