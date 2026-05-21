@@ -7,7 +7,7 @@
 <!-- Main Dashboard Container -->
 <div class="dashboard-container">
     <!-- Toast Notifications -->
-    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 11;">
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;">
         @if (IsLoading)
         {
             <div class="toast show" role="alert">
@@ -24,7 +24,7 @@
                 <div class="toast-header bg-danger text-white">
                     <i class="bi bi-exclamation-circle me-2"></i>
                     <strong>Error</strong>
-                    <button type="button" class="btn-close btn-close-white" @onclick="() => ErrorMessage = null"></button>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseErrorMessage"></button>
                 </div>
                 <div class="toast-body">@ErrorMessage</div>
             </div>
@@ -35,7 +35,7 @@
                 <div class="toast-header bg-success text-white">
                     <i class="bi bi-check-circle me-2"></i>
                     <strong>Success</strong>
-                    <button type="button" class="btn-close btn-close-white" @onclick="() => SuccessMessage = null"></button>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseSuccessMessage"></button>
                 </div>
                 <div class="toast-body">@SuccessMessage</div>
             </div>
@@ -278,96 +278,96 @@
 <!-- Create Report Modal -->
 @if (IsCreateReportModalOpen)
 {
-<div class="modal fade show d-block" id="createReportModal" tabindex="-1" aria-modal="true" role="dialog">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title">
-                    <i class="bi bi-plus-circle"></i> Create New Report
-                </h5>
-                <button type="button" class="btn-close btn-close-white" @onclick="CloseCreateReportModal"></button>
-            </div>
-            <div class="modal-body">
-                <p>You're about to create a new report for <strong>@CycleLabel</strong>.</p>
-                <p class="text-muted">
-                    <small>
-                        <i class="bi bi-info-circle"></i> 
-                        This report will contain all department sections. You can save progress and come back anytime before the deadline.
-                    </small>
-                </p>
-                <div class="alert alert-info" role="alert">
-                    <strong>Deadline:</strong> @DeadlineLabel
-                    @if (DaysLeft.HasValue && DaysLeft > 0)
-                    {
-                        <span class="badge bg-warning ms-2">@DaysLeft day(s) remaining</span>
-                    }
+    <div class="modal-backdrop fade show" style="z-index: 1040;"></div>
+    <div class="modal fade show d-block" id="createReportModal" tabindex="-1" aria-modal="true" role="dialog" style="z-index: 1050;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-plus-circle"></i> Create New Report
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseCreateReportModal" aria-label="Close"></button>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" @onclick="CloseCreateReportModal">Cancel</button>
-                <button type="button" class="btn btn-primary" @onclick="OnCreateReportConfirmedAsync" disabled="@IsLoading">
-                    @if (IsLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        <span>Creating@("...")</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-check-circle"></i> <span>Create Report</span>
-                    }
-                </button>
+                <div class="modal-body">
+                    <p>You're about to create a new report for <strong>@CycleLabel</strong>.</p>
+                    <p class="text-muted">
+                        <small>
+                            <i class="bi bi-info-circle"></i> 
+                            This report will contain all department sections. You can save progress and come back anytime before the deadline.
+                        </small>
+                    </p>
+                    <div class="alert alert-info" role="alert">
+                        <strong>Deadline:</strong> @DeadlineLabel
+                        @if (DaysLeft.HasValue && DaysLeft > 0)
+                        {
+                            <span class="badge bg-warning ms-2">@DaysLeft day(s) remaining</span>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseCreateReportModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="OnCreateReportConfirmedAsync" disabled="@IsLoading">
+                        @if (IsLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Creating@("...")</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check-circle"></i> <span>Create Report</span>
+                        }
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-</div>
-<div class="modal-backdrop fade show"></div>
 }
 
 <!-- Submit Report Modal -->
 @if (IsSubmitReportModalOpen)
 {
-<div class="modal fade show d-block" id="submitReportModal" tabindex="-1" aria-modal="true" role="dialog">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">
-                    <i class="bi bi-send"></i> Submit Report for Review
-                </h5>
-                <button type="button" class="btn-close btn-close-white" @onclick="CloseSubmitReportModal"></button>
-            </div>
-            <div class="modal-body">
-                <p>You are about to submit your report to your unit president for review.</p>
-                <div class="alert alert-warning" role="alert">
-                    <strong><i class="bi bi-exclamation-circle"></i> Important:</strong>
-                    <ul class="mb-0 mt-2">
-                        <li>All departments must be marked as submitted</li>
-                        <li>You won't be able to edit sections after submission</li>
-                        <li>Your unit president will review and approve or request changes</li>
-                    </ul>
+    <div class="modal-backdrop fade show" style="z-index: 1040;"></div>
+    <div class="modal fade show d-block" id="submitReportModal" tabindex="-1" aria-modal="true" role="dialog" style="z-index: 1050;">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">
+                        <i class="bi bi-send"></i> Submit Report for Review
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" @onclick="CloseSubmitReportModal" aria-label="Close"></button>
                 </div>
-                <div class="form-group">
-                    <label for="submissionNotes">Optional Notes for President:</label>
-                    <textarea class="form-control" id="submissionNotes" rows="3" @bind="SubmissionNotes" placeholder="Any notes or clarifications..."></textarea>
+                <div class="modal-body">
+                    <p>You are about to submit your report to your unit president for review.</p>
+                    <div class="alert alert-warning" role="alert">
+                        <strong><i class="bi bi-exclamation-circle"></i> Important:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>All departments must be marked as submitted</li>
+                            <li>You won't be able to edit sections after submission</li>
+                            <li>Your unit president will review and approve or request changes</li>
+                        </ul>
+                    </div>
+                    <div class="form-group">
+                        <label for="submissionNotes">Optional Notes for President:</label>
+                        <textarea class="form-control" id="submissionNotes" rows="3" @bind="SubmissionNotes" placeholder="Any notes or clarifications..."></textarea>
+                    </div>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" @onclick="CloseSubmitReportModal">Cancel</button>
-                <button type="button" class="btn btn-success" @onclick="OnSubmitReportAsync" disabled="@(IsLoading || SubmittedDepartments < TotalDepartments)">
-                    @if (IsLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        <span>Submitting@("...")</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-check2-circle"></i> <span>Submit Report</span>
-                    }
-                </button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseSubmitReportModal">Cancel</button>
+                    <button type="button" class="btn btn-success" @onclick="OnSubmitReportAsync" disabled="@(IsLoading || SubmittedDepartments < TotalDepartments)">
+                        @if (IsLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span>Submitting@("...")</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-check2-circle"></i> <span>Submit Report</span>
+                        }
+                    </button>
+                </div>
             </div>
         </div>
     </div>
-</div>
-<div class="modal-backdrop fade show"></div>
 }
 
 <!-- Styles -->
@@ -387,6 +387,29 @@
 
     .cycle-header {
         border-left: 5px solid #667eea;
+    }
+
+    .modal-backdrop {
+        z-index: 1040 !important;
+    }
+
+    .modal {
+        z-index: 1050 !important;
+    }
+
+    .btn {
+        cursor: pointer;
+        pointer-events: auto;
+    }
+
+    .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+    }
+
+    .btn-close {
+        cursor: pointer;
+        pointer-events: auto;
     }
 
     .info-box {
@@ -672,6 +695,11 @@
 
     .toast-container .toast {
         margin-bottom: 10px;
+        pointer-events: auto;
+    }
+
+    .toast .btn-close {
+        pointer-events: auto;
     }
 </style>
 
@@ -881,6 +909,9 @@
     private void CloseCreateReportModal() => IsCreateReportModalOpen = false;
     private void OpenSubmitReportModal() => IsSubmitReportModalOpen = true;
     private void CloseSubmitReportModal() => IsSubmitReportModalOpen = false;
+
+    private void CloseErrorMessage() => ErrorMessage = null;
+    private void CloseSuccessMessage() => SuccessMessage = null;
 
     private static string GetReportStatusBadgeClass(ReportStatus status) => status switch
     {

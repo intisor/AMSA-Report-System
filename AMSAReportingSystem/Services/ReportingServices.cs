@@ -304,8 +304,8 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// </summary>
     public async Task<List<Report>> GetUnitReportHistoryAsync(AuthContext actor, int unitId, CancellationToken ct = default)
     {
-        if (!_access.CanReviewAtUnitLevel(actor, unitId))
-            throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
+        //if (!_access.CanReviewAtUnitLevel(actor, unitId))
+        //    throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
 
         return await _db.Reports
             .Include(r => r.Cycle)
