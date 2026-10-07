@@ -95,6 +95,7 @@ public sealed class StateReportForm
     public int UnitPresidentsAttended { get; set; }
     public int TotalUnitPresidents { get; set; }
     public int? UnitPerformanceRating { get; set; }
+    public string? AdditionalNotes { get; set; }
     public string? UnitImprovementPlan { get; set; }
     public string? ChallengesFaced { get; set; }
     public string? NationalSupportNeeded { get; set; }
@@ -117,12 +118,22 @@ public sealed class StateProgramForm
 
 public sealed record ReportActivityView(DateTime At, string Action, string? Notes);
 
+public sealed record AttachmentView(
+    int Id,
+    string FileName,
+    string ContentType,
+    long FileSizeBytes,
+    DateTime UploadedAt,
+    int UploadedByMemberId);
+
 public sealed record ReportDepartmentView(
     DepartmentType Department,
     string DepartmentName,
     bool IsSubmitted,
     DateTime? SubmittedAt,
-    string? ReportDataJson);
+    string? ReportDataJson,
+    string? AdditionalNotes,
+    IReadOnlyList<AttachmentView> Attachments);
 
 public sealed record ReportRetrievalSummary(
     int ReportId,
@@ -144,6 +155,7 @@ public sealed record ReportRetrievalDetails(
     string? PresidentialNotes,
     string? StateNotes,
     string? NationalNotes,
+    IReadOnlyList<AttachmentView> StateAttachments,
     IReadOnlyList<ReportDepartmentView> Departments,
     IReadOnlyList<ReportActivityView> ActivityLogs);
 
@@ -249,6 +261,7 @@ public static class StateReportFormMapper
             UnitPresidentsAttended = report.UnitsAttendedTo,
             TotalUnitPresidents = report.TotalUnitReportsCount,
             UnitPerformanceRating = report.UnitPerformanceRating,
+            AdditionalNotes = report.AdditionalNotes,
             UnitImprovementPlan = report.UnitImprovementPlan,
             ChallengesFaced = report.ChallengesFaced,
             NationalSupportNeeded = report.NationalSupportNeeded,

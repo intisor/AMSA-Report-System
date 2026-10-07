@@ -1,4 +1,4 @@
-﻿@page "/"
+@page "/"
 @using Microsoft.AspNetCore.Components.Authorization
 @using AMSAReportingSystem.Services
 @using System.Security.Claims
@@ -9,110 +9,135 @@
 
 @if (CurrentUser == null)
 {
-    <!-- Not authenticated - Show landing page -->
-    <div class="container py-5">
-        <div class="row align-items-center min-vh-100">
-            <div class="col-lg-6 mx-auto">
-                <div class="text-center mb-5">
-                    <h1 class="display-4 fw-bold mb-4" style="color: #2f6b3f;">
-                        <span style="font-size: 3rem;">📋</span>
-                        <br>
-                        AMSA Reporting System
-                    </h1>
-                    <p class="lead text-muted mb-4">
-                        Streamlined monthly reporting for all MSSA/AMSA units across Nigeria
-                    </p>
-                    <p class="text-secondary mb-5">
-                        Submit reports, track compliance, and monitor organizational performance
-                    </p>
-                </div>
+    <!-- Not authenticated - Show beautiful landing page -->
+    <div class="min-h-screen bg-bg-cream flex flex-col justify-between relative overflow-hidden font-body-md select-none text-on-surface">
+        
+        <!-- Heritage watermark background patterns -->
+        <div class="absolute -right-40 -top-40 w-96 h-96 text-primary/5 pointer-events-none rotate-45 select-none">
+            <svg fill="none" stroke="currentColor" stroke-width="4" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="20,20 80,20 80,80 20,80"></polygon>
+                <polygon points="50,5 95,50 50,95 5,50"></polygon>
+            </svg>
+        </div>
+        
+        <div class="absolute -left-20 bottom-10 w-80 h-80 text-primary/5 pointer-events-none -rotate-12 select-none">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="40"></circle>
+                <polygon points="50,10 90,50 50,90 10,50"></polygon>
+            </svg>
+        </div>
 
-                <div class="card shadow-lg border-0 mb-4">
-                    <div class="card-body p-5">
-                        <h4 class="card-title mb-4 text-center">Key Features</h4>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="feature-item">
-                                    <div style="font-size: 2rem; margin-bottom: 10px;">📤</div>
-                                    <h6>Monthly Submissions</h6>
-                                    <small class="text-muted">Report on 9 departments</small>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="feature-item">
-                                    <div style="font-size: 2rem; margin-bottom: 10px;">✅</div>
-                                    <h6>Compliance Tracking</h6>
-                                    <small class="text-muted">Real-time validation</small>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="feature-item">
-                                    <div style="font-size: 2rem; margin-bottom: 10px;">🔄</div>
-                                    <h6>Multi-Level Approvals</h6>
-                                    <small class="text-muted">Officer → President → State → National</small>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="feature-item">
-                                    <div style="font-size: 2rem; margin-bottom: 10px;">📊</div>
-                                    <h6>Analytics Dashboard</h6>
-                                    <small class="text-muted">State and national insights</small>
-                                </div>
-                            </div>
-                        </div>
+        <!-- Header -->
+        <header class="max-w-7xl mx-auto w-full px-6 py-6 flex justify-between items-center z-10">
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-md">
+                    <span class="material-symbols-outlined text-white font-bold text-xl">assignment</span>
+                </div>
+                <div>
+                    <h1 class="font-headline-sm text-base text-primary font-bold tracking-tight">AMSA</h1>
+                    <p class="text-[10px] text-outline uppercase tracking-widest font-bold -mt-1">Reporting Portal</p>
+                </div>
+            </div>
+            <button class="px-5 py-2 text-xs font-bold text-primary bg-primary-light border border-primary/10 rounded-xl hover:bg-primary hover:text-white transition-all cursor-pointer" @onclick="GoToLogin">
+                Sign In
+            </button>
+        </header>
+
+        <!-- Main Hero Section -->
+        <main class="max-w-7xl mx-auto w-full px-6 py-12 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center z-10">
+            <!-- Left Grid: Content (7 cols) -->
+            <div class="lg:col-span-6 flex flex-col gap-6 text-left">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-tertiary-fixed-dim bg-primary-light shadow-sm w-fit">
+                    <span class="material-symbols-outlined text-primary text-xs fill">verified</span>
+                    <span class="font-label-sm text-[11px] text-primary font-bold tracking-wide">National Reporting Infrastructure</span>
+                </div>
+                
+                <h2 class="font-headline-xl text-3xl md:text-4xl text-primary font-extrabold leading-tight">
+                    Seamless administrative reporting for <span class="text-secondary">AMSA Nigeria</span> units.
+                </h2>
+                
+                <p class="font-body-lg text-sm text-on-surface-variant leading-relaxed max-w-xl">
+                    A centralized, elegant digital workspace engineered to collect, validate, and aggregate administrative records for Ahmadiyya Muslim Students' Association units across Nigeria.
+                </p>
+                
+                <div class="flex flex-wrap items-center gap-4 mt-2">
+                    <button class="px-6 py-3.5 bg-gradient-to-r from-primary to-primary-container text-white rounded-xl font-semibold text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg shadow-md flex items-center gap-2 cursor-pointer border-0" @onclick="GoToLogin">
+                        <span>Get Started Workspace</span>
+                        <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                    </button>
+                    <div class="flex items-center gap-2 text-xs text-on-surface-variant">
+                        <span class="material-symbols-outlined text-warning text-sm fill">lock</span>
+                        <span>Secure MKAN authentication</span>
                     </div>
                 </div>
-
-                <div class="text-center">
-                    <button class="btn btn-primary btn-lg px-5 py-3" @onclick="GoToLogin">
-                        <strong>Sign In to Continue →</strong>
-                    </button>
-                </div>
-
-                <p class="text-center text-muted mt-4 small">
-                    Sign in with your registered AMSA MKAN ID to continue.
-                </p>
             </div>
-        </div>
+
+            <!-- Right Grid: Feature Bento Cards (5 cols) -->
+            <div class="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="bg-surface-white p-5 rounded-2xl border border-border-subtle shadow-sm flex flex-col gap-3 group hover:border-tertiary-fixed-dim transition-all duration-300">
+                    <div class="w-9 h-9 rounded-full bg-primary-light text-primary flex items-center justify-center">
+                        <span class="material-symbols-outlined text-base font-bold">calendar_month</span>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-on-surface">Monthly Submissions</h4>
+                        <p class="text-xs text-on-surface-variant mt-1">Structured templates for all 9 core departments under AMSA.</p>
+                    </div>
+                </div>
+                
+                <div class="bg-surface-white p-5 rounded-2xl border border-border-subtle shadow-sm flex flex-col gap-3 group hover:border-tertiary-fixed-dim transition-all duration-300">
+                    <div class="w-9 h-9 rounded-full bg-primary-light text-primary flex items-center justify-center">
+                        <span class="material-symbols-outlined text-base font-bold">verified</span>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-on-surface">Compliance Tracking</h4>
+                        <p class="text-xs text-on-surface-variant mt-1">Real-time evaluations ensure report metrics fulfill criteria.</p>
+                    </div>
+                </div>
+                
+                <div class="bg-surface-white p-5 rounded-2xl border border-border-subtle shadow-sm flex flex-col gap-3 group hover:border-tertiary-fixed-dim transition-all duration-300">
+                    <div class="w-9 h-9 rounded-full bg-primary-light text-primary flex items-center justify-center">
+                        <span class="material-symbols-outlined text-base font-bold">flowsheet</span>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-on-surface">Multi-Level Approvals</h4>
+                        <p class="text-xs text-on-surface-variant mt-1">Transparent review workflows from Officer to National Secretariat.</p>
+                    </div>
+                </div>
+                
+                <div class="bg-surface-white p-5 rounded-2xl border border-border-subtle shadow-sm flex flex-col gap-3 group hover:border-tertiary-fixed-dim transition-all duration-300">
+                    <div class="w-9 h-9 rounded-full bg-primary-light text-primary flex items-center justify-center">
+                        <span class="material-symbols-outlined text-base font-bold">query_stats</span>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm text-on-surface">Analytics Engine</h4>
+                        <p class="text-xs text-on-surface-variant mt-1">Powerful dashboards for state and national leadership oversight.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="max-w-7xl mx-auto w-full px-6 py-6 border-t border-border-subtle z-10 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p class="text-xs text-on-surface-variant">© 2026 Ahmadiyya Muslim Students' Association Nigeria. All rights reserved.</p>
+            <div class="flex items-center gap-2 text-xs text-outline font-semibold">
+                <span>Refining administration through precision & Amanah</span>
+            </div>
+        </footer>
     </div>
 }
 else
 {
-    <!-- Authenticated - Show dashboard for their role -->
-    <div class="alert alert-info" role="alert">
-        <strong>Welcome, @CurrentUser.FirstName! 👋</strong> Redirecting to your dashboard...
+    <!-- Authenticated - Show redirecting state -->
+    <div class="min-h-screen bg-bg-cream flex items-center justify-center p-6">
+        <div class="bg-surface-white border border-border-subtle rounded-2xl p-8 max-w-sm w-full text-center shadow-lg animate-pulse flex flex-col items-center gap-4">
+            <span class="material-symbols-outlined text-primary text-5xl animate-spin">sync</span>
+            <div>
+                <h4 class="font-headline-sm text-lg text-primary font-bold">Assalamu Alaikum, @CurrentUser.FirstName!</h4>
+                <p class="text-xs text-on-surface-variant mt-1">Redirecting you to the reporting portal...</p>
+            </div>
+        </div>
     </div>
 }
-
-<style>
-    .feature-item {
-        text-align: center;
-        padding: 15px;
-    }
-
-    .feature-item h6 {
-        font-weight: 600;
-        margin-bottom: 5px;
-    }
-
-    .min-vh-100 {
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #2f6b3f 0%, #4c7d4f 100%);
-        border: none;
-        transition: all 0.3s ease;
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(47, 107, 63, 0.3);
-    }
-</style>
 
 @code {
     private AuthContext? CurrentUser;
@@ -127,16 +152,19 @@ else
             var roles = user.Claims.Where(c => c.Type == ClaimTypes.Role).Select(c => c.Value).ToList();
             CurrentUser = new AuthContext
             {
-                MkanId = 0, // Replace with actual value
+                MkanId = 0,
                 FirstName = user.Identity.Name ?? "Unknown",
-                LastName = "", // Replace with actual value
+                LastName = "",
                 Email = user.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value ?? "",
-                UnitName = "", // Replace with actual value
-                StateName = "", // Replace with actual value
-                NationalName = "", // Replace with actual value
-                Token = "", // Replace with actual value
+                UnitName = "",
+                StateName = "",
+                NationalName = "",
+                Token = "",
                 Roles = roles
             };
+            
+            // Proactive redirection
+            Nav.NavigateTo("/dashboard", forceLoad: false);
         }
     }
 

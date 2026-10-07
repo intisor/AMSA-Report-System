@@ -1,7 +1,10 @@
+@using AMSAReportingSystem.Core.Abstractions
 @using AMSAReportingSystem.Data.Entities
 @using AMSAReportingSystem.Services
-@inject CurrentUserReportService CurrentUserReportService
-@inject AmsaDirectoryLookupCache DirectoryLookupCache
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@inject ReportingApiClient ReportingApiClient
+@inject IOrganizationDirectory DirectoryLookupCache
 
 <div class="container">
     @if (IsLoading)
@@ -108,8 +111,37 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label">Shared Additional Notes</label>
+                        <textarea class="form-control" rows="3" @bind="StateForm.AdditionalNotes"></textarea>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label">Give a brief and concise report of any other specific things worthy of note</label>
                         <textarea class="form-control" rows="3" @bind="StateForm.OtherNotes"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">State Supporting Files</label>
+                        <InputFile OnChange="HandleStateAttachmentSelectedAsync" disabled="@DisableStateFormActions" />
+                        @if (StateAttachments.Count == 0)
+                        {
+                            <div class="form-text">No state attachments uploaded yet.</div>
+                        }
+                        else
+                        {
+                            <ul class="list-group mt-2">
+                                @foreach (var attachment in StateAttachments)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <a href="@GetStateAttachmentDownloadUrl(attachment.Id)" target="_blank" rel="noopener noreferrer">@attachment.FileName</a>
+                                            (@FormatFileSize(attachment.FileSizeBytes))
+                                        </span>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveStateAttachmentAsync(attachment.Id)" disabled="@DisableStateFormActions">Remove</button>
+                                    </li>
+                                }
+                            </ul>
+                        }
                     </div>
 
                     @if (IsCycleLocked)
@@ -159,8 +191,13 @@
                             @foreach (var report in Reports)
                             {
                                 var submitted = report.DepartmentReports.Count(d => d.IsSubmitted);
+                                var isExpanded = ExpandedReportIds.Contains(report.Id);
                                 <tr>
-                                    <td><strong>@GetUnitName(report.UnitId)</strong></td>
+                                    <td>
+                                        <button type="button" class="btn btn-link btn-sm text-decoration-none fw-bold px-0" @onclick="() => ToggleExpanded(report.Id)">
+                                            <span class="me-1">@(isExpanded ? "▼" : "▶")</span><strong>@GetUnitName(report.UnitId)</strong>
+                                        </button>
+                                    </td>
                                     <td><span class="badge @GetStatusBadge(report.Status)">@report.Status</span></td>
                                     <td>@(report.ApprovedByPresidentAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
                                     <td>@submitted / @report.DepartmentReports.Count</td>
@@ -183,6 +220,47 @@
                                         }
                                     </td>
                                 </tr>
+
+                                @if (isExpanded)
+                                {
+                                    <tr class="table-light">
+                                        <td colspan="6">
+                                            <div class="p-3">
+                                                <div class="row g-3">
+                                                    @foreach (var department in report.DepartmentReports.OrderBy(d => d.Department))
+                                                    {
+                                                        <div class="col-lg-6">
+                                                            <div class="border rounded p-3 h-100 bg-white">
+                                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                                    <strong>@department.Department</strong>
+                                                                    <span class="small text-muted">@department.Attachments.Count file(s)</span>
+                                                                </div>
+                                                                <div class="small text-muted mb-2">@(string.IsNullOrWhiteSpace(department.AdditionalNotes) ? "No shared additional note." : department.AdditionalNotes)</div>
+                                                                @if (department.Attachments.Count == 0)
+                                                                {
+                                                                    <div class="small text-muted">No attachments uploaded.</div>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <ul class="list-group list-group-flush">
+                                                                        @foreach (var attachment in department.Attachments.OrderByDescending(a => a.UploadedAt))
+                                                                        {
+                                                                            <li class="list-group-item px-0">
+                                                                                <div class="fw-semibold"><a href="@GetDepartmentAttachmentDownloadUrl(attachment.Id)" target="_blank" rel="noopener noreferrer">@attachment.FileName</a></div>
+                                                                                <div class="small text-muted">@attachment.ContentType · @FormatFileSize(attachment.FileSizeBytes)</div>
+                                                                                <div class="small text-muted">Uploaded @attachment.UploadedAt.ToString("MMM d, yyyy h:mm tt")</div>
+                                                                            </li>
+                                                                        }
+                                                                    </ul>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
                             }
                         }
                     </tbody>
@@ -208,8 +286,10 @@
     private Dictionary<int, string> NotesByReport = new();
     private Dictionary<int, string> UnitNamesById = new();
     private StateReportForm StateForm = new();
+    private List<StateReportAttachment> StateAttachments = new();
     private int StateReportId;
     private StateReport? CurrentStateReport;
+    private HashSet<int> ExpandedReportIds = new();
     private bool DisableStateFormActions => IsSavingStateForm || IsCycleLocked || StateReportSubmitted;
 
     protected override async Task OnInitializedAsync()
@@ -222,21 +302,22 @@
         IsLoading = true;
         try
         {
-            var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
+            var cycle = await ReportingApiClient.GetActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
             DeadlineLabel = cycle.SubmissionDeadline.ToString("MMMM d, yyyy");
             IsCycleLocked = cycle.IsLocked || DateTime.UtcNow.Date > cycle.SubmissionDeadline.Date;
 
-            Reports = await CurrentUserReportService.GetStateUnitReportsAsync(cycle.Id);
+            Reports = await ReportingApiClient.GetStateReportsAsync(cycle.Id);
             NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
             await WarmReportNamesAsync();
 
-            CurrentStateReport = await CurrentUserReportService.EnsureMyStateReportAsync(cycle.Id);
+            CurrentStateReport = await ReportingApiClient.GetStateReportAsync(cycle.Id);
             if (CurrentStateReport is not null)
             {
                 StateReportId = CurrentStateReport.Id;
                 StateReportSubmitted = CurrentStateReport.Status is ReportStatus.SubmittedToNational or ReportStatus.Acknowledged;
                 StateForm = StateReportFormMapper.ToForm(CurrentStateReport);
+                StateAttachments = [.. CurrentStateReport.Attachments.OrderByDescending(a => a.UploadedAt)];
                 if (StateForm.Programs.Count == 0)
                 {
                     StateForm.Programs.Add(new StateProgramForm());
@@ -248,6 +329,7 @@
                 StateReportSubmitted = false;
                 StateForm = new StateReportForm();
                 StateForm.Programs.Add(new StateProgramForm());
+                StateAttachments = new();
             }
         }
         catch (Exception ex)
@@ -281,8 +363,9 @@
         try
         {
             StateForm.StateReportId = StateReportId;
-            var saved = await CurrentUserReportService.SaveMyStateReportAsync(StateReportId, StateForm, markSubmitted);
+            var saved = await ReportingApiClient.SaveStateReportAsync(StateReportId, StateForm, markSubmitted);
             StateForm = StateReportFormMapper.ToForm(saved);
+            StateAttachments = [.. saved.Attachments.OrderByDescending(a => a.UploadedAt)];
             if (StateForm.Programs.Count == 0)
             {
                 StateForm.Programs.Add(new StateProgramForm());
@@ -306,6 +389,39 @@
         StateForm.Programs.Add(new StateProgramForm());
     }
 
+    private async Task HandleStateAttachmentSelectedAsync(InputFileChangeEventArgs args)
+    {
+        if (DisableStateFormActions || StateReportId <= 0 || args.File is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var attachment = await ReportingApiClient.AddStateReportAttachmentAsync(StateReportId, args.File);
+            StateAttachments.Insert(0, attachment);
+            SetMessage($"Attached {args.File.Name} to the state report.", true);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+    }
+
+    private async Task RemoveStateAttachmentAsync(int attachmentId)
+    {
+        try
+        {
+            await ReportingApiClient.RemoveStateReportAttachmentAsync(attachmentId);
+            StateAttachments.RemoveAll(a => a.Id == attachmentId);
+            SetMessage("State attachment removed.", true);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+    }
+
     private void RemoveProgram(int index)
     {
         if (index < 0 || index >= StateForm.Programs.Count)
@@ -324,7 +440,7 @@
     {
         try
         {
-            var updated = await CurrentUserReportService.ApproveAtStateAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            var updated = await ReportingApiClient.ApproveAtStateAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
             ReplaceReport(updated);
             SetMessage($"Report #{reportId} approved and forwarded to national.", true);
         }
@@ -338,7 +454,7 @@
     {
         try
         {
-            var updated = await CurrentUserReportService.RejectAtStateAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            var updated = await ReportingApiClient.RejectAtStateAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
             ReplaceReport(updated);
             SetMessage($"Report #{reportId} rejected at state level.", true);
         }
@@ -375,6 +491,14 @@
     private string GetUnitName(int unitId) =>
         UnitNamesById.TryGetValue(unitId, out var name) ? name : $"Unit {unitId}";
 
+    private void ToggleExpanded(int reportId)
+    {
+        if (!ExpandedReportIds.Add(reportId))
+        {
+            ExpandedReportIds.Remove(reportId);
+        }
+    }
+
     private async Task WarmReportNamesAsync()
     {
         var unitIds = Reports.Select(r => r.UnitId).Distinct().ToList();
@@ -383,6 +507,10 @@
             UnitNamesById[unitId] = await DirectoryLookupCache.GetUnitNameAsync(unitId);
         }
     }
+
+    private static string GetDepartmentAttachmentDownloadUrl(int attachmentId) => $"/attachments/department/{attachmentId}";
+
+    private static string GetStateAttachmentDownloadUrl(int attachmentId) => $"/attachments/state/{attachmentId}";
 
     private static string GetStatusBadge(ReportStatus status) => status switch
     {
@@ -395,5 +523,20 @@
         ReportStatus.Acknowledged => "bg-success",
         _ => "bg-secondary"
     };
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024d:F1} KB";
+        }
+
+        return $"{bytes / 1024d / 1024d:F1} MB";
+    }
 }
 

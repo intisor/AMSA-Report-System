@@ -16,6 +16,7 @@ public class StateReport
     public int? UnitPerformanceRating { get; set; } // 0-100
     
     // Content
+    public string? AdditionalNotes { get; set; }
     public string? UnitImprovementPlan { get; set; }
     public string? ChallengesFaced { get; set; }
     public string? NationalSupportNeeded { get; set; } // Escalation queue
@@ -54,6 +55,7 @@ public class StateReport
 
     // Navigation properties
     public ICollection<StateReportProgram> Programs { get; set; } = new List<StateReportProgram>();
+    public ICollection<StateReportAttachment> Attachments { get; set; } = new List<StateReportAttachment>();
 }
 
 /// <summary>

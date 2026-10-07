@@ -1,5 +1,7 @@
 using AMSAReportingSystem.Data;
 using AMSAReportingSystem.Data.Entities;
+using AMSAReportingSystem.Core.Abstractions;
+using AMSAReportingSystem.Core.Storage;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
@@ -12,14 +14,17 @@ namespace AMSAReportingSystem.Services;
 /// Consolidates DepartmentReportService, StateReportService, and ReportLifecycleService functionality
 /// Organized by operational scope: Department Ops, State Ops, Report Lifecycle, and Cycles
 /// </summary>
-public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaApiClient,ReportAccessService access,ILogger<UnifiedReportService> logger)
+public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaApiClient,ReportAccessService access,ILogger<UnifiedReportService> logger,IAttachmentStorage attachmentStorage)
 {
     private const int DefaultSubmissionGraceDays = 7;
+    private const long MaxAttachmentSizeBytes = 10 * 1024 * 1024;
+    private static readonly string[] AllowedAttachmentExtensions = [".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".xlsx", ".xls", ".txt"];
 
     private readonly AMSAReportingDbContext _db = db;
     private readonly IAmsaApiClient _amSaApiClient = amSaApiClient;
     private readonly ReportAccessService _access = access;
     private readonly ILogger<UnifiedReportService> _logger = logger;
+    private readonly IAttachmentStorage _attachmentStorage = attachmentStorage;
 
     #region Department Report Operations
 
@@ -27,14 +32,14 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// Saves department-specific report data to database
     /// Validates JSON, checks permissions, and updates submission status
     /// </summary>
-    public async Task<DepartmentReport> SaveDepartmentDataAsync(int reportId,DepartmentType department,string reportDataJson,AuthContext actor,bool markSubmitted,CancellationToken ct = default)
+    public async Task<DepartmentReport> SaveDepartmentDataAsync(int reportId,DepartmentType department,string reportDataJson,string? additionalNotes,CurrentUserScope actor,bool markSubmitted,CancellationToken ct = default)
     {
         ValidateJson(reportDataJson);
 
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
 
-        if (!_access.CanEditDepartment(actor, report.UnitId, report.StateId, department))
+        if (!_access.CanEditDepartment(actor, report.UnitId, report.StateId, department.ToString()))
             throw new UnauthorizedAccessException("You are not allowed to edit this department report.");
         
 
@@ -48,6 +53,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
                 ReportId = reportId,
                 CycleId = report.CycleId,
                 Department = department,
+                AdditionalNotes = additionalNotes,
                 ReportData = reportDataJson,
                 IsSubmitted = markSubmitted,
                 IsCompliant = false,
@@ -60,6 +66,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         else
         {
             departmentReport.ReportData = reportDataJson;
+            departmentReport.AdditionalNotes = additionalNotes;
             if (markSubmitted)
             {
                 departmentReport.IsSubmitted = true;
@@ -88,7 +95,99 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     public async Task<DepartmentReport?> GetDepartmentReportAsync(int reportId,DepartmentType department,CancellationToken ct = default)
     {
         return await _db.DepartmentReports
+            .Include(d => d.Attachments)
             .FirstOrDefaultAsync(d => d.ReportId == reportId && d.Department == department, ct);
+    }
+
+    public async Task<IReadOnlyList<ReportAttachment>> GetDepartmentAttachmentsAsync(CurrentUserScope actor, int reportId, DepartmentType department, CancellationToken ct = default)
+    {
+        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
+            ?? throw new InvalidOperationException($"Report {reportId} not found.");
+
+        if (!_access.CanEditDepartment(actor, report.UnitId, report.StateId, department.ToString())
+            && !_access.CanReviewAtUnitLevel(actor, report.UnitId)
+            && !_access.CanReviewAtStateLevel(actor, report.StateId)
+            && !_access.IsNationalLeadership(actor))
+        {
+            throw new UnauthorizedAccessException("You are not allowed to view these department attachments.");
+        }
+
+        return await _db.ReportAttachments
+            .Where(a => a.DepartmentReport.ReportId == reportId && a.DepartmentReport.Department == department)
+            .OrderByDescending(a => a.UploadedAt)
+            .ToListAsync(ct);
+    }
+
+    public async Task<ReportAttachment> GetDepartmentAttachmentAsync(CurrentUserScope actor, int attachmentId, CancellationToken ct = default)
+    {
+        var attachment = await _db.ReportAttachments
+            .Include(a => a.DepartmentReport)
+            .ThenInclude(dr => dr.Report)
+            .FirstOrDefaultAsync(a => a.Id == attachmentId, ct)
+            ?? throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+        var report = attachment.DepartmentReport.Report;
+        if (!_access.CanEditDepartment(actor, report.UnitId, report.StateId, attachment.DepartmentReport.Department.ToString())
+            && !_access.CanReviewAtUnitLevel(actor, report.UnitId)
+            && !_access.CanReviewAtStateLevel(actor, report.StateId)
+            && !_access.IsNationalLeadership(actor))
+        {
+            throw new UnauthorizedAccessException("You are not allowed to view this department attachment.");
+        }
+
+        return attachment;
+    }
+
+    public async Task<ReportAttachment> AddDepartmentAttachmentAsync(CurrentUserScope actor, int reportId, DepartmentType department, string fileName, string contentType, byte[] content, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
+            ?? throw new InvalidOperationException($"Report {reportId} not found.");
+
+        if (!_access.CanEditDepartment(actor, report.UnitId, report.StateId, department.ToString()))
+            throw new UnauthorizedAccessException("You are not allowed to add attachments to this department report.");
+
+        await EnsureCycleOpenForEditsAsync(report.CycleId, ct);
+
+        var departmentReport = await _db.DepartmentReports.FirstOrDefaultAsync(d => d.ReportId == reportId && d.Department == department, ct)
+            ?? throw new InvalidOperationException("Department report not found.");
+
+        ValidateAttachment(fileName, content.LongLength);
+        var savedFile = await _attachmentStorage.SaveAsync("department", $"{reportId}/{department}", fileName, contentType, content, ct);
+
+        var attachment = new ReportAttachment
+        {
+            DepartmentReportId = departmentReport.Id,
+            FileName = Path.GetFileName(fileName),
+            StoredFileName = savedFile.RelativePath,
+            ContentType = savedFile.ContentType,
+            FileSizeBytes = savedFile.FileSizeBytes,
+            UploadedAt = DateTime.UtcNow,
+            UploadedByMemberId = actor.MemberId
+        };
+
+        _db.ReportAttachments.Add(attachment);
+        await _db.SaveChangesAsync(ct);
+        return attachment;
+    }
+
+    public async Task RemoveDepartmentAttachmentAsync(CurrentUserScope actor, int attachmentId, CancellationToken ct = default)
+    {
+        var attachment = await _db.ReportAttachments
+            .Include(a => a.DepartmentReport)
+            .ThenInclude(dr => dr.Report)
+            .FirstOrDefaultAsync(a => a.Id == attachmentId, ct)
+            ?? throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+        if (!_access.CanEditDepartment(actor, attachment.DepartmentReport.Report.UnitId, attachment.DepartmentReport.Report.StateId, attachment.DepartmentReport.Department.ToString()))
+            throw new UnauthorizedAccessException("You are not allowed to remove this attachment.");
+
+        await EnsureCycleOpenForEditsAsync(attachment.DepartmentReport.Report.CycleId, ct);
+
+        await _attachmentStorage.DeleteAsync(attachment.StoredFileName, ct);
+        _db.ReportAttachments.Remove(attachment);
+        await _db.SaveChangesAsync(ct);
     }
 
     #endregion
@@ -99,7 +198,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// Retrieves state-level report with authorization check
     /// Includes programs and activity logs
     /// </summary>
-    public async Task<StateReport?> GetStateReportAsync(AuthContext actor,int stateId,int cycleId,CancellationToken ct = default)
+    public async Task<StateReport?> GetStateReportAsync(CurrentUserScope actor,int stateId,int cycleId,CancellationToken ct = default)
     {
         if (!_access.CanReviewAtStateLevel(actor, stateId)) 
             throw new UnauthorizedAccessException("You are not allowed to manage this state report.");
@@ -121,7 +220,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// Ensures a state report exists, creating if necessary
     /// Initializes with Draft status and links available submitted department reports
     /// </summary>
-    public async Task<StateReport> EnsureStateReportAsync(AuthContext actor,int stateId,int cycleId,CancellationToken ct = default)
+    public async Task<StateReport> EnsureStateReportAsync(CurrentUserScope actor,int stateId,int cycleId,CancellationToken ct = default)
     {
         var existing = await GetStateReportAsync(actor, stateId, cycleId, ct);
 
@@ -151,7 +250,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// Updates state report with aggregated data and leadership notes
     /// Validates form data and manages program list updates
     /// </summary>
-    public async Task<StateReport> SaveStateReportAsync(AuthContext actor,int stateReportId,StateReportForm form,bool markSubmitted,CancellationToken ct = default)
+    public async Task<StateReport> SaveStateReportAsync(CurrentUserScope actor,int stateReportId,StateReportForm form,bool markSubmitted,CancellationToken ct = default)
     {
         var stateReport = await _db.StateReports
             .Include(sr => sr.Programs)
@@ -171,6 +270,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
 
         // Preserve leadership commentary fields, but enforce aggregate metrics/programs from unit reports.
         stateReport.UnitImprovementPlan = form.UnitImprovementPlan;
+        stateReport.AdditionalNotes = form.AdditionalNotes;
         stateReport.ChallengesFaced = form.ChallengesFaced;
         stateReport.NationalSupportNeeded = form.NationalSupportNeeded;
         stateReport.OtherNotes = form.OtherNotes;
@@ -189,7 +289,84 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
 
         return await _db.StateReports
             .Include(sr => sr.Programs)
+            .Include(sr => sr.Attachments)
             .FirstAsync(sr => sr.Id == stateReport.Id, ct);
+    }
+
+    public async Task<IReadOnlyList<StateReportAttachment>> GetStateReportAttachmentsAsync(CurrentUserScope actor, int stateReportId, CancellationToken ct = default)
+    {
+        var stateReport = await _db.StateReports.FirstOrDefaultAsync(sr => sr.Id == stateReportId, ct)
+            ?? throw new InvalidOperationException($"State report {stateReportId} not found.");
+
+        if (!_access.CanReviewAtStateLevel(actor, stateReport.StateId) && !_access.IsNationalLeadership(actor))
+            throw new UnauthorizedAccessException("You are not allowed to view these state report attachments.");
+
+        return await _db.StateReportAttachments
+            .Where(a => a.StateReportId == stateReportId)
+            .OrderByDescending(a => a.UploadedAt)
+            .ToListAsync(ct);
+    }
+
+    public async Task<StateReportAttachment> GetStateReportAttachmentAsync(CurrentUserScope actor, int attachmentId, CancellationToken ct = default)
+    {
+        var attachment = await _db.StateReportAttachments
+            .Include(a => a.StateReport)
+            .FirstOrDefaultAsync(a => a.Id == attachmentId, ct)
+            ?? throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+        if (!_access.CanReviewAtStateLevel(actor, attachment.StateReport.StateId) && !_access.IsNationalLeadership(actor))
+            throw new UnauthorizedAccessException("You are not allowed to view this state report attachment.");
+
+        return attachment;
+    }
+
+    public async Task<StateReportAttachment> AddStateReportAttachmentAsync(CurrentUserScope actor, int stateReportId, string fileName, string contentType, byte[] content, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        var stateReport = await _db.StateReports.FirstOrDefaultAsync(sr => sr.Id == stateReportId, ct)
+            ?? throw new InvalidOperationException($"State report {stateReportId} not found.");
+
+        if (!_access.CanReviewAtStateLevel(actor, stateReport.StateId))
+            throw new UnauthorizedAccessException("You are not allowed to add attachments to this state report.");
+
+        await EnsureCycleOpenForEditsAsync(stateReport.CycleId, ct);
+        if (stateReport.Status is ReportStatus.SubmittedToNational or ReportStatus.Acknowledged)
+            throw new InvalidOperationException("This state report is read-only.");
+
+        ValidateAttachment(fileName, content.LongLength);
+        var savedFile = await _attachmentStorage.SaveAsync("state", stateReportId.ToString(), fileName, contentType, content, ct);
+
+        var attachment = new StateReportAttachment
+        {
+            StateReportId = stateReportId,
+            FileName = Path.GetFileName(fileName),
+            StoredFileName = savedFile.RelativePath,
+            ContentType = savedFile.ContentType,
+            FileSizeBytes = savedFile.FileSizeBytes,
+            UploadedAt = DateTime.UtcNow,
+            UploadedByMemberId = actor.MemberId
+        };
+
+        _db.StateReportAttachments.Add(attachment);
+        await _db.SaveChangesAsync(ct);
+        return attachment;
+    }
+
+    public async Task RemoveStateReportAttachmentAsync(CurrentUserScope actor, int attachmentId, CancellationToken ct = default)
+    {
+        var attachment = await _db.StateReportAttachments
+            .Include(a => a.StateReport)
+            .FirstOrDefaultAsync(a => a.Id == attachmentId, ct)
+            ?? throw new InvalidOperationException($"Attachment {attachmentId} not found.");
+
+        if (!_access.CanReviewAtStateLevel(actor, attachment.StateReport.StateId))
+            throw new UnauthorizedAccessException("You are not allowed to remove this state report attachment.");
+
+        await EnsureCycleOpenForEditsAsync(attachment.StateReport.CycleId, ct);
+        await _attachmentStorage.DeleteAsync(attachment.StoredFileName, ct);
+        _db.StateReportAttachments.Remove(attachment);
+        await _db.SaveChangesAsync(ct);
     }
 
     #endregion
@@ -204,6 +381,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         return await _db.Reports
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
+                .ThenInclude(d => d.Attachments)
             .Include(r => r.ActivityLogs)
             .FirstOrDefaultAsync(r => r.Id == reportId, ct);
     }
@@ -211,7 +389,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// Retrieves draft report for unit if authorized
     /// </summary>
-    public async Task<Report?> GetDraftAsync(AuthContext actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
+    public async Task<Report?> GetDraftAsync(CurrentUserScope actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
     {
         if (!_access.CanInitiateReportSubmission(actor, amsaUnitId, actor.StateId))
             throw new UnauthorizedAccessException("You are not allowed to create or manage reports for this unit.");
@@ -221,6 +399,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
 
         var  reports =  await _db.Reports
             .Include(r => r.DepartmentReports)
+                .ThenInclude(d => d.Attachments)
             .Include(r => r.ActivityLogs)
             .FirstOrDefaultAsync(r => r.UnitId == amsaUnitId && r.CycleId == cycleId, ct);
 
@@ -230,7 +409,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// Creates draft report for unit with all departments initialized
     /// </summary>
-    public async Task<Report> EnsureDraftAsync(AuthContext actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
+    public async Task<Report> EnsureDraftAsync(CurrentUserScope actor, int amsaUnitId, int cycleId, CancellationToken ct = default)
     {
         var existing = await GetDraftAsync(actor, amsaUnitId, cycleId, ct);
         if (existing is not null)
@@ -281,7 +460,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// Retrieves all reports for a unit with optional cycle filter
     /// </summary>
-    public async Task<List<Report>> GetUnitReportsAsync(AuthContext actor, int unitId, int? cycleId = null, CancellationToken ct = default)
+    public async Task<List<Report>> GetUnitReportsAsync(CurrentUserScope actor, int unitId, int? cycleId = null, CancellationToken ct = default)
     {
         if (!_access.CanReviewAtUnitLevel(actor, unitId))
             throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
@@ -294,6 +473,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         return await _db.Reports
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
+                .ThenInclude(d => d.Attachments)
             .Where(r => r.UnitId == unitId && r.CycleId == selectedCycleId.Value)
             .OrderByDescending(r => r.UpdatedAt)
             .ToListAsync(ct);
@@ -302,7 +482,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// Retrieves all reports for a unit across all cycles for read-only retrieval
     /// </summary>
-    public async Task<List<Report>> GetUnitReportHistoryAsync(AuthContext actor, int unitId, CancellationToken ct = default)
+    public async Task<List<Report>> GetUnitReportHistoryAsync(CurrentUserScope actor, int unitId, CancellationToken ct = default)
     {
         //if (!_access.CanReviewAtUnitLevel(actor, unitId))
         //    throw new UnauthorizedAccessException("You are not allowed to view reports for this unit.");
@@ -310,6 +490,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         return await _db.Reports
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
+                .ThenInclude(d => d.Attachments)
             .Include(r => r.ActivityLogs)
             .Where(r => r.UnitId == unitId)
             .OrderByDescending(r => r.Cycle.StartDate)
@@ -320,7 +501,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// Retrieves all reports for a state with optional cycle filter
     /// </summary>
-    public async Task<List<Report>> GetStateReportsAsync(AuthContext actor, int stateId, int? cycleId = null, CancellationToken ct = default)
+    public async Task<List<Report>> GetStateReportsAsync(CurrentUserScope actor, int stateId, int? cycleId = null, CancellationToken ct = default)
     {
         if (!_access.CanReviewAtStateLevel(actor, stateId))
             throw new UnauthorizedAccessException("You are not allowed to view reports for this state.");
@@ -333,6 +514,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         return await _db.Reports
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
+                .ThenInclude(d => d.Attachments)
             .Where(r => r.CycleId == selectedCycleId.Value && r.StateId == stateId)
             .OrderBy(r => r.UpdatedAt)
             .ToListAsync(ct);
@@ -342,7 +524,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// Retrieves all reports nationally with optional cycle filter
     /// National leadership only
     /// </summary>
-    public async Task<List<Report>> GetNationalReportsAsync(AuthContext actor, int? cycleId = null, CancellationToken ct = default)
+    public async Task<List<Report>> GetNationalReportsAsync(CurrentUserScope actor, int? cycleId = null, CancellationToken ct = default)
     {
         if (!_access.IsNationalLeadership(actor))
             throw new UnauthorizedAccessException("Only national leadership can view national report board.");
@@ -356,6 +538,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         return await _db.Reports
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
+                .ThenInclude(d => d.Attachments)
             .Where(r => r.CycleId == selectedCycleId.Value)
             .OrderBy(r => r.StateId)
             .ThenBy(r => r.UnitId)
@@ -367,7 +550,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// Combines Report + StateReport so National sees state's commentary, challenges, plans
     /// National leadership only
     /// </summary>
-    public async Task<List<ReportWithStateContext>> GetNationalReportsWithStateContextAsync(AuthContext actor, int? cycleId = null, CancellationToken ct = default)
+    public async Task<List<ReportWithStateContext>> GetNationalReportsWithStateContextAsync(CurrentUserScope actor, int? cycleId = null, CancellationToken ct = default)
     {
         if (!_access.IsNationalLeadership(actor))
             throw new UnauthorizedAccessException("Only national leadership can view national report board.");
@@ -379,6 +562,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         var reports = await _db.Reports
             .Include(r => r.Cycle)
             .Include(r => r.DepartmentReports)
+                .ThenInclude(d => d.Attachments)
             .Include(r => r.ActivityLogs)
             .Where(r => r.CycleId == selectedCycleId.Value)
             .OrderBy(r => r.StateId)
@@ -393,6 +577,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
             // Get state report context for this state+cycle
             var stateReport = await _db.StateReports
                 .Include(sr => sr.Programs)
+                .Include(sr => sr.Attachments)
                 .AsNoTracking()
                 .FirstOrDefaultAsync(sr => sr.StateId == report.StateId && sr.CycleId == selectedCycleId.Value, ct);
 
@@ -424,6 +609,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
                     UnitImprovementPlan: stateReport.UnitImprovementPlan,
                     ChallengesFaced: stateReport.ChallengesFaced,
                     NationalSupportNeeded: stateReport.NationalSupportNeeded,
+                    AdditionalNotes: stateReport.AdditionalNotes,
                     OtherNotes: stateReport.OtherNotes,
                     PresidentialNote: stateReport.PresidentialNote,
                     ApprovedByPresidentAt: stateReport.ApprovedByPresidentAt,
@@ -431,6 +617,9 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
                     AcknowledgedByNationalAt: stateReport.AcknowledgedByNationalAt,
                     IsAggregated: stateReport.IsAggregated,
                     LastAggregatedAt: stateReport.LastAggregatedAt,
+                    Attachments: [.. stateReport.Attachments
+                        .OrderByDescending(a => a.UploadedAt)
+                        .Select(MapAttachmentView)],
                     Programs: [.. stateReport.Programs
                         .Select(p => new StateReportProgramView(
                             p.ProgramId,
@@ -444,7 +633,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
                 // Department data
                 Departments: [.. report.DepartmentReports
                     .OrderBy(d => d.Department)
-                    .Select(d => new ReportDepartmentView(d.Department, d.Department.ToString(), d.IsSubmitted, d.SubmittedAt, d.ReportData))],
+                    .Select(d => new ReportDepartmentView(d.Department, d.Department.ToString(), d.IsSubmitted, d.SubmittedAt, d.ReportData, d.AdditionalNotes, [.. d.Attachments.OrderByDescending(a => a.UploadedAt).Select(MapAttachmentView)]))],
                 
                 // Activity logs
                 ActivityLogs: [.. report.ActivityLogs
@@ -453,7 +642,6 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
 
             result.Add(reportWithContext);
         }
-
         return result;
     }
 
@@ -461,7 +649,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// Submits report from unit to president for review
     /// At least one departments must be submitted first
     /// </summary>
-    public async Task<Report> SubmitReportToPresidentAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
+    public async Task<Report> SubmitReportToPresidentAsync(CurrentUserScope actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports
             .Include(r => r.DepartmentReports)
@@ -502,7 +690,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// Unit president approves report, moving to state level
     /// </summary>
-    public async Task<Report> ApproveByUnitLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
+    public async Task<Report> ApproveByUnitLeadershipAsync(CurrentUserScope actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
@@ -545,7 +733,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// Unit president rejects report, sending back to unit for revisions
     /// </summary>
-    public async Task<Report> RejectByUnitLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
+    public async Task<Report> RejectByUnitLeadershipAsync(CurrentUserScope actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)
             ?? throw new InvalidOperationException($"Report {reportId} not found.");
@@ -576,7 +764,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// State leadership approves report, moving to national level
     /// </summary>
-    public async Task<Report> ApproveByStateLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
+    public async Task<Report> ApproveByStateLeadershipAsync(CurrentUserScope actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct) ?? throw new InvalidOperationException($"Report {reportId} not found.");
         if (!_access.CanReviewAtStateLevel(actor, report.StateId))
@@ -607,7 +795,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// State leadership rejects report, sending back to unit
     /// </summary>
-    public async Task<Report> RejectByStateLeadershipAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
+    public async Task<Report> RejectByStateLeadershipAsync(CurrentUserScope actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         var report = await _db.Reports.FirstOrDefaultAsync(r => r.Id == reportId, ct)  ?? throw new InvalidOperationException($"Report {reportId} not found.");
 
@@ -637,7 +825,7 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
     /// <summary>
     /// National leadership acknowledges report completion
     /// </summary>
-    public async Task<Report> AcknowledgeByNationalAsync(AuthContext actor, int reportId, string? notes = null, CancellationToken ct = default)
+    public async Task<Report> AcknowledgeByNationalAsync(CurrentUserScope actor, int reportId, string? notes = null, CancellationToken ct = default)
     {
         if (!_access.IsNationalLeadership(actor))
             throw new UnauthorizedAccessException("Only national leadership can acknowledge reports.");
@@ -759,6 +947,25 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
         }
     }
 
+    private static AttachmentView MapAttachmentView(ReportAttachment attachment) =>
+        new(attachment.Id, attachment.FileName, attachment.ContentType, attachment.FileSizeBytes, attachment.UploadedAt, attachment.UploadedByMemberId);
+
+    private static AttachmentView MapAttachmentView(StateReportAttachment attachment) =>
+        new(attachment.Id, attachment.FileName, attachment.ContentType, attachment.FileSizeBytes, attachment.UploadedAt, attachment.UploadedByMemberId);
+
+    private static void ValidateAttachment(string fileName, long fileSize)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+            throw new ArgumentException("Attachment file name is required.", nameof(fileName));
+
+        if (fileSize <= 0 || fileSize > MaxAttachmentSizeBytes)
+            throw new InvalidOperationException("Attachment must be between 1 byte and 10 MB.");
+
+        var extension = Path.GetExtension(fileName);
+        if (string.IsNullOrWhiteSpace(extension) || !AllowedAttachmentExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Attachment file type is not allowed.");
+    }
+
     private static void ValidateStateReportForm(StateReportForm form)
     {
         if (form.UnitPresidentsAttended < 0 || form.TotalUnitPresidents < 0)
@@ -868,9 +1075,9 @@ public class UnifiedReportService(AMSAReportingDbContext db,IAmsaApiClient amSaA
 /// Wraps UnifiedReportService with automatic user context retrieval
 /// Reduces boilerplate in components
 /// </summary>
-public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,UnifiedReportService reportService)
+public class CurrentUserReportService(ICurrentUserContext currentUserContext, UnifiedReportService reportService)
 {
-    private readonly AMSAAuthStateProvider _authStateProvider = authStateProvider;
+    private readonly ICurrentUserContext _currentUserContext = currentUserContext;
     private readonly UnifiedReportService _reportService = reportService;
 
     #region Reporting Cycle & Draft Management
@@ -910,9 +1117,24 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
         return report?.DepartmentReports.FirstOrDefault(d => d.Department == department);
     }
 
-    public Task<DepartmentReport> SaveDepartmentJsonAsync(int reportId,DepartmentType department,string reportDataJson,bool markSubmitted,CancellationToken ct = default) =>
+    public Task<DepartmentReport> SaveDepartmentJsonAsync(int reportId,DepartmentType department,string reportDataJson,string? additionalNotes,bool markSubmitted,CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor =>
-            _reportService.SaveDepartmentDataAsync(reportId, department, reportDataJson, actor, markSubmitted, ct));
+            _reportService.SaveDepartmentDataAsync(reportId, department, reportDataJson, additionalNotes, actor, markSubmitted, ct));
+
+    public Task<IReadOnlyList<ReportAttachment>> GetDepartmentAttachmentsAsync(int reportId, DepartmentType department, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => _reportService.GetDepartmentAttachmentsAsync(actor, reportId, department, ct));
+
+    public Task<ReportAttachment> GetDepartmentAttachmentAsync(int attachmentId, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => _reportService.GetDepartmentAttachmentAsync(actor, attachmentId, ct));
+
+    public Task<ReportAttachment> AddDepartmentAttachmentAsync(int reportId, DepartmentType department, string fileName, string contentType, byte[] content, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => _reportService.AddDepartmentAttachmentAsync(actor, reportId, department, fileName, contentType, content, ct));
+
+    public async Task RemoveDepartmentAttachmentAsync(int attachmentId, CancellationToken ct = default)
+    {
+        var actor = await GetCurrentUserOrThrowAsync().ConfigureAwait(false);
+        await _reportService.RemoveDepartmentAttachmentAsync(actor, attachmentId, ct);
+    }
 
     #endregion
 
@@ -920,14 +1142,14 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
 
     public async Task<List<ReportRetrievalSummary>> GetCurrentUserReportHistoryAsync(CancellationToken ct = default)
     {
-        var actor = GetCurrentUserOrThrow();
+        var actor = await GetCurrentUserOrThrowAsync().ConfigureAwait(false);
         var reports = await _reportService.GetUnitReportHistoryAsync(actor, actor.UnitId, ct);
         return [.. reports.Select(MapReportSummary)];
     }
 
     public async Task<ReportRetrievalDetails?> GetReportDetailsAsync(int reportId, CancellationToken ct = default)
     {
-        var actor = GetCurrentUserOrThrow();
+        var actor = await GetCurrentUserOrThrowAsync().ConfigureAwait(false);
         var report = await _reportService.GetReportAsync(reportId, ct);
         if (report is null)
             return null;
@@ -952,19 +1174,23 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
 
     public bool CanEditOwnUnitDepartment(DepartmentType department)
     {
-        var user = _authStateProvider.GetCurrentUser();
-        if (user is null || !user.IsAuthenticated)
+        var user = _currentUserContext.GetCurrentUserAsync().AsTask().GetAwaiter().GetResult();
+        if (user is null)
+        {
             return false;
+        }
 
         var access = new ReportAccessService();
-        return access.CanEditDepartment(user, user.UnitId, user.StateId, department);
+        return access.CanEditDepartment(user, user.UnitId, user.StateId, department.ToString());
     }
 
     public bool CanInitiateCurrentUserReportSubmission()
     {
-        var user = _authStateProvider.GetCurrentUser();
-        if (user is null || !user.IsAuthenticated)
+        var user = _currentUserContext.GetCurrentUserAsync().AsTask().GetAwaiter().GetResult();
+        if (user is null)
+        {
             return false;
+        }
 
         var access = new ReportAccessService();
         return access.CanInitiateReportSubmission(user, user.UnitId, user.StateId);
@@ -1003,6 +1229,21 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
     public Task<StateReport> SaveMyStateReportAsync(int stateReportId, StateReportForm form, bool markSubmitted, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => 
             _reportService.SaveStateReportAsync(actor, stateReportId, form, markSubmitted, ct));
+
+    public Task<IReadOnlyList<StateReportAttachment>> GetStateReportAttachmentsAsync(int stateReportId, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => _reportService.GetStateReportAttachmentsAsync(actor, stateReportId, ct));
+
+    public Task<StateReportAttachment> GetStateReportAttachmentAsync(int attachmentId, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => _reportService.GetStateReportAttachmentAsync(actor, attachmentId, ct));
+
+    public Task<StateReportAttachment> AddStateReportAttachmentAsync(int stateReportId, string fileName, string contentType, byte[] content, CancellationToken ct = default) =>
+        ExecuteAsCurrentUserAsync(actor => _reportService.AddStateReportAttachmentAsync(actor, stateReportId, fileName, contentType, content, ct));
+
+    public async Task RemoveStateReportAttachmentAsync(int attachmentId, CancellationToken ct = default)
+    {
+        var actor = await GetCurrentUserOrThrowAsync().ConfigureAwait(false);
+        await _reportService.RemoveStateReportAttachmentAsync(actor, attachmentId, ct);
+    }
 
     public Task<List<Report>> GetNationalReportsAsync(int? cycleId = null, CancellationToken ct = default) =>
         ExecuteAsCurrentUserAsync(actor => 
@@ -1062,29 +1303,36 @@ public class CurrentUserReportService(AMSAAuthStateProvider authStateProvider,Un
             report.PresidentialNotes,
             report.StateNotes,
             report.NationalNotes,
+            [],
             [.. report.DepartmentReports
                 .OrderBy(d => d.Department)
-                .Select(d => new ReportDepartmentView(d.Department, d.Department.ToString(), d.IsSubmitted, d.SubmittedAt, d.ReportData))],
+                .Select(d => new ReportDepartmentView(d.Department, d.Department.ToString(), d.IsSubmitted, d.SubmittedAt, d.ReportData, d.AdditionalNotes, [.. d.Attachments.OrderByDescending(a => a.UploadedAt).Select(a => new AttachmentView(a.Id, a.FileName, a.ContentType, a.FileSizeBytes, a.UploadedAt, a.UploadedByMemberId))]))],
             [.. report.ActivityLogs
                 .OrderByDescending(log => log.ActionAt)
                 .Select(log => new ReportActivityView(log.ActionAt, log.Action, log.Notes))]);
 
-    private AuthContext GetCurrentUserOrThrow()
+    private async Task<CurrentUserScope> GetCurrentUserOrThrowAsync()
     {
-        var user = _authStateProvider.GetCurrentUser();
-        if (user is null || !user.IsAuthenticated)
+        var scope = await _currentUserContext.GetCurrentUserAsync().ConfigureAwait(false);
+        if (scope is null)
+        {
             throw new UnauthorizedAccessException("Login required.");
+        }
 
-        return user;
+        return scope;
     }
 
-    private Task<T> ExecuteAsCurrentUserAsync<T>(Func<AuthContext, Task<T>> operation) =>
-        operation(GetCurrentUserOrThrow());
+    private Task<T> ExecuteAsCurrentUserAsync<T>(Func<CurrentUserScope, Task<T>> operation) =>
+        ExecuteAsCurrentUserCoreAsync(operation);
 
-    private T ExecuteAsCurrentUser<T>(Func<AuthContext, T> operation) =>
-        operation(GetCurrentUserOrThrow());
+    private T ExecuteAsCurrentUser<T>(Func<CurrentUserScope, T> operation) =>
+        ExecuteAsCurrentUserAsync(actor => Task.FromResult(operation(actor))).GetAwaiter().GetResult();
+
+    private async Task<T> ExecuteAsCurrentUserCoreAsync<T>(Func<CurrentUserScope, Task<T>> operation) =>
+        await operation(await GetCurrentUserOrThrowAsync().ConfigureAwait(false)).ConfigureAwait(false);
 
     #endregion
 }
 
 #endregion
+

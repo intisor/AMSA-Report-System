@@ -5,123 +5,87 @@
 @inject NavigationManager Nav
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
-<div class="login-container">
-    <div class="login-card">
-        <div class="login-header">
-            <h1>AMSA Reporting System</h1>
-            <p class="subtitle">Ahmadiyya Muslim Students' Association Nigeria</p>
+<PageTitle>Sign In - AMSA Reporting System</PageTitle>
+
+<div class="min-h-screen bg-bg-cream flex items-center justify-center p-6 relative overflow-hidden font-body-md select-none">
+    <!-- Heritage watermark background patterns -->
+    <div class="absolute -right-20 -top-20 w-80 h-80 text-primary/5 pointer-events-none rotate-45 select-none">
+        <svg fill="none" stroke="currentColor" stroke-width="4" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="20,20 80,20 80,80 20,80"></polygon>
+            <polygon points="50,5 95,50 50,95 5,50"></polygon>
+        </svg>
+    </div>
+    <div class="absolute -left-20 -bottom-20 w-80 h-80 text-primary/5 pointer-events-none -rotate-12 select-none">
+        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="40"></circle>
+            <polygon points="50,10 90,50 50,90 10,50"></polygon>
+        </svg>
+    </div>
+
+    <div class="bg-surface-white rounded-3xl border border-border-subtle shadow-xl max-w-md w-full overflow-hidden animate-slideIn relative z-10">
+        <!-- Card Header -->
+        <div class="p-8 bg-gradient-to-r from-primary to-primary-container text-white text-center relative">
+            <div class="w-12 h-12 rounded-2xl bg-surface-white/10 backdrop-blur-md flex items-center justify-center mx-auto mb-4 border border-white/10 shadow-inner animate-pulse-glow">
+                <span class="material-symbols-outlined text-white text-2xl font-bold">lock_open</span>
+            </div>
+            <h1 class="font-headline-md text-xl font-bold tracking-tight mb-1">AMSA Reporting Portal</h1>
+            <p class="text-xs text-white/80 font-medium">Ahmadiyya Muslim Students' Association Nigeria</p>
         </div>
 
-        <div class="login-body">
-            <form @onsubmit="HandleLogin">
-                <div class="form-group mb-3">
-                    <label for="mkanId" class="form-label">MKAN ID</label>
-                    <input 
-                        type="text" 
-                        class="form-control form-control-lg" 
-                        id="mkanId" 
-                        placeholder="Enter your MKAN ID"
-                        @bind="MkanId"
-                        disabled="@IsLoading"
-                    />
-                    <small class="text-muted d-block mt-1">Use your AMSA MKAN ID.</small>
+        <!-- Card Body -->
+        <div class="p-8 flex flex-col gap-6">
+            <form @onsubmit="HandleLogin" class="flex flex-col gap-5">
+                <div class="flex flex-col gap-2">
+                    <label for="mkanId" class="text-xs font-bold text-outline uppercase tracking-wider">MKAN ID</label>
+                    <div class="relative">
+                        <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-outline text-lg">badge</span>
+                        <input 
+                            type="text" 
+                            class="w-full rounded-xl border border-border-subtle pl-10 pr-4 py-3 text-sm focus:border-primary focus:ring-4 focus:ring-gold-glow outline-none transition-all" 
+                            id="mkanId" 
+                            placeholder="Enter your MKAN ID"
+                            @bind="MkanId"
+                            disabled="@IsLoading"
+                        />
+                    </div>
+                    <span class="text-[10px] text-on-surface-variant leading-relaxed">Enter your registered AMSA MKAN membership identifier.</span>
                 </div>
 
                 @if (!string.IsNullOrEmpty(ErrorMessage))
                 {
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        @ErrorMessage
-                        <button type="button" class="btn-close" @onclick="() => ErrorMessage = null"></button>
+                    <div class="p-4 bg-danger-bg text-danger border border-danger/20 rounded-xl text-xs font-semibold flex items-start gap-2.5 animate-fadeIn">
+                        <span class="material-symbols-outlined text-sm mt-0.5">error</span>
+                        <div class="flex-1">@ErrorMessage</div>
+                        <button type="button" class="text-danger/60 hover:text-danger cursor-pointer bg-transparent border-0" @onclick="() => ErrorMessage = null">
+                            <span class="material-symbols-outlined text-xs">close</span>
+                        </button>
                     </div>
                 }
 
-                <button type="submit" class="btn btn-primary btn-lg w-100" disabled="@IsLoading">
+                <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-primary to-primary-container text-white rounded-xl font-semibold text-sm transition-all hover:-translate-y-0.5 hover:shadow-lg shadow-md flex items-center justify-center gap-2 cursor-pointer border-0" disabled="@IsLoading">
                     @if (IsLoading)
                     {
-                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        <span>Logging in...</span>
+                        <span class="material-symbols-outlined text-sm animate-spin">sync</span>
+                        <span>Authenticating...</span>
                     }
                     else
                     {
-                        <span>Login</span>
+                        <span class="material-symbols-outlined text-sm">login</span>
+                        <span>Sign In Portal</span>
                     }
                 </button>
             </form>
         </div>
 
-        <div class="login-footer">
-            <p class="text-muted text-center mb-0">
-                Secure sign-in powered by AMSA API.
+        <!-- Card Footer -->
+        <div class="px-8 py-4 bg-bg-cream border-t border-border-subtle text-center">
+            <p class="text-[11px] text-on-surface-variant font-medium flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined text-xs text-outline">verified_user</span>
+                <span>Secure sign-in powered by national administrative auth node.</span>
             </p>
         </div>
     </div>
 </div>
-
-<style>
-    .login-container {
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #f6f1e6 0%, #e7efdd 100%);
-        padding: 20px;
-    }
-
-    .login-card {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 10px 40px rgba(31, 77, 44, 0.12);
-        width: 100%;
-        max-width: 450px;
-        overflow: hidden;
-        border: 1px solid #d8decf;
-    }
-
-    .login-header {
-        background: linear-gradient(135deg, #2f6b3f 0%, #4c7d4f 100%);
-        color: white;
-        padding: 40px 30px;
-        text-align: center;
-    }
-
-    .login-header h1 {
-        margin: 0;
-        font-size: 28px;
-        font-weight: 700;
-    }
-
-    .login-header .subtitle {
-        margin: 8px 0 0 0;
-        font-size: 14px;
-        opacity: 0.95;
-    }
-
-    .login-body {
-        padding: 40px 30px;
-    }
-
-    .login-footer {
-        background: #f8f3e8;
-        padding: 20px 30px;
-        border-top: 1px solid #d8decf;
-    }
-
-    .form-control:focus {
-        border-color: #2f6b3f;
-        box-shadow: 0 0 0 0.2rem rgba(47, 107, 63, 0.18);
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #2f6b3f 0%, #4c7d4f 100%);
-        border: none;
-        font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-
-    .btn-primary:hover:not(:disabled) {
-        background: linear-gradient(135deg, #255730 0%, #3f6a41 100%);
-    }
-</style>
 
 @code {
     private string? MkanId;

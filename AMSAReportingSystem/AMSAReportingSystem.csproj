@@ -25,6 +25,12 @@
   <ItemGroup>
     <Folder Include="Components\Shared\" />
     <Folder Include="Models\" />
+    <Folder Include="Persistence\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AMSAReportingSystem.Core\AMSAReportingSystem.Core.csproj" />
+    <ProjectReference Include="..\AMSAReportingSystem.Infrastructure\AMSAReportingSystem.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

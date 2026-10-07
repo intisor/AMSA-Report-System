@@ -14,10 +14,12 @@ public class AMSAReportingDbContext : DbContext
     public DbSet<ReportingCycle> ReportingCycles { get; set; }
     public DbSet<Report> Reports { get; set; }
     public DbSet<DepartmentReport> DepartmentReports { get; set; }
+    public DbSet<ReportAttachment> ReportAttachments { get; set; }
 
     // State reports
     public DbSet<StateReport> StateReports { get; set; }
     public DbSet<StateReportProgram> StateReportPrograms { get; set; }
+    public DbSet<StateReportAttachment> StateReportAttachments { get; set; }
 
     // Supporting entities
     public DbSet<ReportActivityLog> ReportActivityLogs { get; set; }
@@ -71,9 +73,22 @@ public class AMSAReportingDbContext : DbContext
             entity.HasIndex(e => e.ReportId);
             entity.HasIndex(e => e.CycleId);
             entity.HasIndex(e => new { e.ReportId, e.Department }).IsUnique();
-            entity.Property(e => e.ReportData).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.AdditionalNotes).HasMaxLength(2000);
             entity.Property(e => e.DuesCollected).HasPrecision(18, 2);
             entity.Property(e => e.ExpectedDues).HasPrecision(18, 2);
+            entity.HasMany(e => e.Attachments)
+                .WithOne(a => a.DepartmentReport)
+                .HasForeignKey(a => a.DepartmentReportId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReportAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.DepartmentReportId);
+            entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.StoredFileName).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.ContentType).IsRequired().HasMaxLength(150);
         });
 
         // ===== StateReport Configuration =====
@@ -84,6 +99,7 @@ public class AMSAReportingDbContext : DbContext
             entity.HasIndex(e => e.Status);
             entity.HasIndex(e => e.StateId);
             entity.HasIndex(e => e.CycleId);
+            entity.Property(e => e.AdditionalNotes).HasMaxLength(2000);
             entity.Property(e => e.UnitImprovementPlan).HasMaxLength(2000);
             entity.Property(e => e.ChallengesFaced).HasMaxLength(2000);
             entity.Property(e => e.NationalSupportNeeded).HasMaxLength(2000);
@@ -92,6 +108,19 @@ public class AMSAReportingDbContext : DbContext
                 .WithOne(p => p.StateReport)
                 .HasForeignKey(p => p.StateReportId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(e => e.Attachments)
+                .WithOne(a => a.StateReport)
+                .HasForeignKey(a => a.StateReportId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StateReportAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.StateReportId);
+            entity.Property(e => e.FileName).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.StoredFileName).IsRequired().HasMaxLength(255);
+            entity.Property(e => e.ContentType).IsRequired().HasMaxLength(150);
         });
 
         // ===== StateReportProgram Configuration =====

@@ -2,40 +2,54 @@
 @using AMSAReportingSystem.Services
 @inject AMSAApiConnectionStatus ApiStatus
 
-<div class="d-flex flex-column min-vh-100">
+<div class="min-h-screen bg-bg-cream text-on-surface font-body-md flex flex-col">
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark site-nav">
-        <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="/">
-                <span style="font-size: 1.5rem; margin-right: 10px;">📋</span>
-                <strong>AMSA</strong> Reporting
-            </a>
-            <span class="badge @GetAmsaBadgeClass() me-3">@GetAmsaBadgeText()</span>
-            <button class="navbar-toggler" type="button" @onclick="ToggleNavMenu">
-                <span class="navbar-toggler-icon"></span>
+    <nav class="fixed top-0 w-full z-50 bg-gradient-to-r from-primary to-primary-container shadow-md h-16 flex items-center">
+        <div class="w-full flex justify-between items-center px-6">
+            <div class="flex items-center gap-3">
+                <a class="flex items-center gap-2 font-headline-md text-headline-md font-bold text-tertiary-fixed no-underline hover:opacity-90" href="/">
+                    <span class="text-2xl">📋</span>
+                    <span>AMSA Nigeria</span>
+                </a>
+                <span class="px-3 py-1 rounded-full text-xs font-semibold shadow-sm @(ApiStatus.IsConnected ? "bg-success text-white" : "bg-danger text-white")">
+                    @GetAmsaBadgeText()
+                </span>
+            </div>
+            
+            <button class="md:hidden text-white hover:opacity-80 p-2" type="button" @onclick="ToggleNavMenu">
+                <span class="material-symbols-outlined">menu</span>
             </button>
-            <div class="collapse navbar-collapse @(IsNavMenuOpen ? "show" : string.Empty)" id="navbarNav">
+            
+            <div class="hidden md:flex items-center gap-6">
                 <NavMenu />
             </div>
         </div>
     </nav>
 
+    <!-- Mobile Dropdown Menu -->
+    @if (IsNavMenuOpen)
+    {
+        <div class="md:hidden fixed top-16 left-0 w-full bg-primary-container z-40 border-b border-border-subtle p-4 shadow-lg animate-fadeIn">
+            <NavMenu />
+        </div>
+    }
+
     <!-- Main Content -->
-    <main class="flex-grow-1 page-surface">
-        <article>
+    <main class="flex-grow pt-16 min-h-screen">
+        <div class="p-6 md:p-10 max-w-7xl mx-auto">
             @Body
-        </article>
+        </div>
     </main>
 
     <!-- Footer -->
-    <footer class="bg-light text-center py-3 mt-5 border-top">
-        <div class="container text-muted small">
-            <p class="mb-0">© 2025 Ahmadi Muslim Students' Association of Nigeria (AMSA) Reporting System</p>
+    <footer class="bg-surface border-t border-border-subtle py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-6 text-center text-on-surface-variant text-sm">
+            <p class="mb-0">© 2026 Ahmadiyya Muslim Students' Association of Nigeria (AMSA) Reporting System</p>
         </div>
     </footer>
 </div>
 
-<div id="blazor-error-ui" data-nosnippet>
+<div id="blazor-error-ui" data-nosnippet class="hidden">
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>

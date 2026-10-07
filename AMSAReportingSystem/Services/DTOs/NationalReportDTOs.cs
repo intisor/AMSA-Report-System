@@ -44,6 +44,7 @@ public record StateReportContext(
     decimal UnitPresidentAttendanceRate,
 
     // Leadership Form (State's Commentary)
+    string? AdditionalNotes,
     string? UnitImprovementPlan,
     string? ChallengesFaced,
     string? NationalSupportNeeded,
@@ -58,6 +59,9 @@ public record StateReportContext(
     // Aggregation metadata
     bool IsAggregated,
     DateTime? LastAggregatedAt,
+
+    // Attachments
+    List<AttachmentView> Attachments,
 
     // Aggregated programs (state-level metrics)
     List<StateReportProgramView> Programs);

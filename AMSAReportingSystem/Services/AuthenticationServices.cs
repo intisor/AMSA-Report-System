@@ -1,4 +1,5 @@
 using AMSAReportingSystem.Components.Pages;
+using AMSAReportingSystem.Core.Abstractions;
 using AMSAReportingSystem.Data.Entities;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.JSInterop;
@@ -159,6 +160,40 @@ public class AmsaAuthService
             _ => "UnitDashboard"
         };
     }
+}
+
+public sealed class AmsaCurrentUserContext(AMSAAuthStateProvider authStateProvider) : ICurrentUserContext
+{
+    private readonly AMSAAuthStateProvider _authStateProvider = authStateProvider;
+
+    public ValueTask<CurrentUserScope?> GetCurrentUserAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var user = _authStateProvider.GetCurrentUser();
+        if (user is null || !user.IsAuthenticated)
+        {
+            return ValueTask.FromResult<CurrentUserScope?>(null);
+        }
+
+        CurrentUserScope scope = new(
+            user.MemberId,
+            user.UnitId,
+            user.StateId,
+            user.NationalId,
+            [.. user.ParsedRoles.Select(role => new RoleScope(role.DepartmentName, ToOrganizationLevel(role.LevelType)))],
+            user.HasSudoAccess);
+
+        return ValueTask.FromResult<CurrentUserScope?>(scope);
+    }
+
+    private static OrganizationLevel ToOrganizationLevel(LevelType levelType) => levelType switch
+    {
+        LevelType.Unit => OrganizationLevel.Unit,
+        LevelType.State => OrganizationLevel.State,
+        LevelType.National => OrganizationLevel.National,
+        _ => OrganizationLevel.Unit
+    };
 }
 
 #endregion

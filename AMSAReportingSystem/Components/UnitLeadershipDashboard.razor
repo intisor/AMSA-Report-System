@@ -1,87 +1,229 @@
 @using AMSAReportingSystem.Data.Entities
 @using AMSAReportingSystem.Services
-@inject CurrentUserReportService CurrentUserReportService
+@using Microsoft.AspNetCore.Components
+@inject ReportingApiClient ReportingApiClient
 
-<div class="container">
+<div class="flex flex-col gap-6 w-full animate-fadeIn max-w-7xl mx-auto pb-12 font-body-md select-none text-on-surface">
     @if (IsLoading)
     {
-        <div class="alert alert-info">Loading unit reports...</div>
+        <div class="bg-surface-white border border-border-subtle rounded-2xl p-8 max-w-md mx-auto text-center shadow-lg animate-pulse flex flex-col items-center gap-4 mt-12">
+            <span class="material-symbols-outlined text-primary text-5xl animate-spin">sync</span>
+            <span class="text-sm font-semibold text-primary">Loading unit reports database...</span>
+        </div>
     }
     else
     {
-        <div class="row mb-3">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">Unit Reports - @CycleLabel</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex gap-4">
-                            <div><strong>Total:</strong> @Reports.Count</div>
-                            <div><strong>Submitted:</strong> @Reports.Count(r => r.Status == ReportStatus.SubmittedToPresident)</div>
-                            <div><strong>Forwarded:</strong> @Reports.Count(r => r.Status == ReportStatus.SubmittedToState)</div>
-                            <div><strong>Rejected:</strong> @Reports.Count(r => r.Status == ReportStatus.RejectedByPresident)</div>
-                        </div>
-                    </div>
+        <!-- Summary Indicators Bento Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-surface-white p-5 rounded-2xl border border-border-subtle flex items-center gap-4 shadow-sm relative overflow-hidden group hover:border-primary transition-all duration-300">
+                <div class="w-12 h-12 rounded-xl bg-primary-light text-primary flex items-center justify-center shadow-sm">
+                    <span class="material-symbols-outlined text-xl">folder_zip</span>
+                </div>
+                <div>
+                    <p class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Total Portals</p>
+                    <h4 class="font-headline-md text-xl text-primary font-bold mt-0.5">@Reports.Count</h4>
+                </div>
+            </div>
+            
+            <div class="bg-surface-white p-5 rounded-2xl border border-border-subtle flex items-center gap-4 shadow-sm relative overflow-hidden group hover:border-success transition-all duration-300">
+                <div class="w-12 h-12 rounded-xl bg-success-bg text-success flex items-center justify-center shadow-sm">
+                    <span class="material-symbols-outlined text-xl">pending_actions</span>
+                </div>
+                <div>
+                    <p class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Awaiting Audit</p>
+                    <h4 class="font-headline-md text-xl text-success font-bold mt-0.5">
+                        @Reports.Count(r => r.Status == ReportStatus.SubmittedToPresident)
+                    </h4>
+                </div>
+            </div>
+
+            <div class="bg-surface-white p-5 rounded-2xl border border-border-subtle flex items-center gap-4 shadow-sm relative overflow-hidden group hover:border-tertiary-fixed-dim transition-all duration-300">
+                <div class="w-12 h-12 rounded-xl bg-bg-cream text-tertiary flex items-center justify-center shadow-sm">
+                    <span class="material-symbols-outlined text-xl">forward_to_inbox</span>
+                </div>
+                <div>
+                    <p class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Forwarded State</p>
+                    <h4 class="font-headline-md text-xl text-tertiary font-bold mt-0.5">
+                        @Reports.Count(r => r.Status == ReportStatus.SubmittedToState)
+                    </h4>
+                </div>
+            </div>
+
+            <div class="bg-surface-white p-5 rounded-2xl border border-border-subtle flex items-center gap-4 shadow-sm relative overflow-hidden group hover:border-danger transition-all duration-300">
+                <div class="w-12 h-12 rounded-xl bg-danger-bg text-danger flex items-center justify-center shadow-sm">
+                    <span class="material-symbols-outlined text-xl">assignment_late</span>
+                </div>
+                <div>
+                    <p class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Flagged / Correcting</p>
+                    <h4 class="font-headline-md text-xl text-danger font-bold mt-0.5">
+                        @Reports.Count(r => r.Status == ReportStatus.RejectedByPresident)
+                    </h4>
                 </div>
             </div>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Message))
         {
-            <div class="alert @MessageClass">@Message</div>
+            var isSuccess = MessageClass.Contains("success");
+            <div class="p-4 rounded-xl text-xs font-semibold flex items-start gap-2.5 animate-fadeIn border @(isSuccess ? "bg-success-bg text-success border-success/20" : "bg-danger-bg text-danger border-danger/20")">
+                <span class="material-symbols-outlined text-sm mt-0.5">@(isSuccess ? "verified" : "error")</span>
+                <div class="flex-1">@Message</div>
+                <button type="button" class="cursor-pointer bg-transparent border-0 opacity-70 hover:opacity-100" @onclick="() => Message = null">
+                    <span class="material-symbols-outlined text-xs">close</span>
+                </button>
+            </div>
         }
 
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Review Queue</h5>
+        <!-- Review Queue Card -->
+        <div class="bg-surface-white rounded-2xl border border-border-subtle shadow-sm overflow-hidden flex flex-col mt-4">
+            <div class="p-5 border-b border-border-subtle bg-surface-container-lowest flex justify-between items-center">
+                <h4 class="font-headline-sm text-base text-on-surface font-bold flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">rate_review</span>
+                    <span>Monthly Submissions Review Queue</span>
+                </h4>
+                <span class="px-2.5 py-0.5 rounded text-[11px] font-bold bg-primary-light text-primary border border-primary/10 uppercase tracking-wider">
+                    @CycleLabel Period
+                </span>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover mb-0">
+            
+            <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-left">
                     <thead>
-                        <tr>
-                            <th>Report Id</th>
-                            <th>Status</th>
-                            <th>Submitted</th>
-                            <th>Departments</th>
-                            <th style="min-width: 260px;">Notes</th>
-                            <th>Actions</th>
+                        <tr class="bg-bg-cream border-b border-border-subtle">
+                            <th class="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider">Report Identifier</th>
+                            <th class="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider">System Status</th>
+                            <th class="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider">Submitted Time</th>
+                            <th class="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider">Sections Ready</th>
+                            <th class="px-6 py-4 text-xs font-bold text-outline uppercase tracking-wider min-w-[260px]">Audit Review Comments</th>
+                            <th class="px-6 py-4 text-xs font-bold text-outline text-right uppercase tracking-wider">Workflow Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-border-subtle bg-white">
                         @if (Reports.Count == 0)
                         {
-                            <tr><td colspan="6" class="text-center text-muted py-4">No reports yet for this cycle.</td></tr>
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center text-on-surface-variant text-sm">
+                                    <span class="material-symbols-outlined text-4xl text-border-subtle mb-2">inbox</span>
+                                    <p class="font-bold">Queue is completely empty.</p>
+                                    <p class="text-xs text-outline mt-1">No reports have been submitted by officers for the active monthly cycle.</p>
+                                </td>
+                            </tr>
                         }
                         else
                         {
                             @foreach (var report in Reports)
                             {
                                 var submittedDepartments = report.DepartmentReports.Count(d => d.IsSubmitted);
-                                <tr>
-                                    <td><strong>#@report.Id</strong></td>
-                                    <td><span class="badge @GetStatusBadge(report.Status)">@report.Status</span></td>
-                                    <td>@(report.SubmittedToPresidentAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
-                                    <td>@submittedDepartments / @report.DepartmentReports.Count</td>
-                                    <td>
-                                        <input class="form-control form-control-sm"
-                                               placeholder="Optional note"
+                                var totalDeptCount = report.DepartmentReports.Count;
+                                var isExpanded = ExpandedReportIds.Contains(report.Id);
+                                
+                                <tr class="hover:bg-bg-cream transition-colors duration-200">
+                                    <td class="px-6 py-4 text-sm font-bold text-primary align-middle">
+                                        <button type="button" class="bg-transparent border-0 text-primary font-bold flex items-center gap-2 cursor-pointer" @onclick="() => ToggleExpanded(report.Id)">
+                                            <span class="material-symbols-outlined text-sm">@(isExpanded ? "expand_less" : "expand_more")</span>
+                                            <span>Report #@report.Id</span>
+                                        </button>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm align-middle">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider @GetStatusBadgeClass(report.Status)">
+                                            <span class="material-symbols-outlined text-[12px] mr-1">@GetStatusBadgeIcon(report.Status)</span>
+                                            @GetStatusBadgeLabel(report.Status)
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-xs text-on-surface-variant font-medium align-middle">
+                                        <span>@(report.SubmittedToPresidentAt?.ToString("MMM d, yyyy - h:mm tt") ?? "—")</span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm align-middle">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold text-xs">@submittedDepartments/@totalDeptCount</span>
+                                            <div class="w-16 bg-surface-variant rounded-full h-1.5 overflow-hidden">
+                                                <div class="bg-primary h-1.5 rounded-full" style="width: @(totalDeptCount == 0 ? "0%" : $"{(submittedDepartments * 100) / totalDeptCount}%")"></div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-[11px] text-on-surface-variant">
+                                            @foreach (var department in report.DepartmentReports.Where(d => !string.IsNullOrWhiteSpace(d.AdditionalNotes) || d.Attachments.Count > 0))
+                                            {
+                                                <div>@department.Department: @(department.Attachments.Count) file(s) · @(string.IsNullOrWhiteSpace(department.AdditionalNotes) ? "No extra note" : "Has note")</div>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm align-middle">
+                                        <input class="w-full rounded-lg border border-border-subtle px-3 py-1.5 text-xs focus:border-primary focus:ring-4 focus:ring-gold-glow outline-none transition-all"
+                                               placeholder="Write audit feedback notes..."
                                                @bind="NotesByReport[report.Id]" />
                                     </td>
-                                    <td>
+                                    <td class="px-6 py-4 text-sm text-right align-middle">
                                         @if (CanUnitLeadershipAct(report))
                                         {
-                                            <div class="d-flex gap-2">
-                                                <button class="btn btn-sm btn-success" @onclick="() => Approve(report.Id)">Approve + Forward</button>
-                                                <button class="btn btn-sm btn-outline-danger" @onclick="() => Reject(report.Id)">Reject</button>
+                                            <div class="inline-flex gap-2">
+                                                <button class="py-1.5 px-3 rounded-lg bg-success hover:bg-primary text-white font-semibold text-xs transition-colors hover:shadow-sm cursor-pointer border-0 flex items-center gap-1" @onclick="() => Approve(report.Id)">
+                                                    <span class="material-symbols-outlined text-sm">forward</span>
+                                                    <span>Forward State</span>
+                                                </button>
+                                                <button class="py-1.5 px-3 rounded-lg bg-surface-white border border-danger/30 text-danger font-semibold text-xs hover:bg-danger hover:text-white hover:border-danger transition-colors cursor-pointer flex items-center gap-1" @onclick="() => Reject(report.Id)">
+                                                    <span class="material-symbols-outlined text-sm">assignment_return</span>
+                                                    <span>Flag Correction</span>
+                                                </button>
                                             </div>
                                         }
                                         else
                                         {
-                                            <span class="text-muted small">No action</span>
+                                            <span class="inline-flex items-center gap-1 text-[11px] text-outline font-semibold">
+                                                <span class="material-symbols-outlined text-xs">lock</span>
+                                                <span>Audit Complete</span>
+                                            </span>
                                         }
                                     </td>
                                 </tr>
+
+                                @if (isExpanded)
+                                {
+                                    <tr class="bg-bg-cream/60">
+                                        <td colspan="6" class="px-6 py-5">
+                                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                                @foreach (var department in report.DepartmentReports.OrderBy(d => d.Department))
+                                                {
+                                                    <div class="rounded-2xl border border-border-subtle bg-surface-white p-4 shadow-sm">
+                                                        <div class="flex items-center justify-between mb-2">
+                                                            <h5 class="text-sm font-bold text-on-surface">@department.Department</h5>
+                                                            <span class="text-[11px] text-on-surface-variant">@department.Attachments.Count file(s)</span>
+                                                        </div>
+
+                                                        <div class="text-xs text-on-surface-variant mb-3">
+                                                            @if (string.IsNullOrWhiteSpace(department.AdditionalNotes))
+                                                            {
+                                                                <span>No shared additional note.</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span>@department.AdditionalNotes</span>
+                                                            }
+                                                        </div>
+
+                                                        @if (department.Attachments.Count == 0)
+                                                        {
+                                                            <div class="text-[11px] text-outline">No attachments uploaded.</div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="space-y-2">
+                                                                @foreach (var attachment in department.Attachments.OrderByDescending(a => a.UploadedAt))
+                                                                {
+                                                                    <div class="rounded-xl border border-border-subtle px-3 py-2 text-xs">
+                                                                        <div class="font-semibold text-on-surface">@attachment.FileName</div>
+                                                                        <div class="text-on-surface-variant">@attachment.ContentType · @FormatFileSize(attachment.FileSizeBytes)</div>
+                                                                        <div class="text-outline">Uploaded @attachment.UploadedAt.ToString("MMM d, yyyy h:mm tt")</div>
+                                                                        <a class="text-primary text-[11px] font-semibold" href="@GetDepartmentAttachmentDownloadUrl(attachment.Id)" target="_blank" rel="noopener noreferrer">Download</a>
+                                                                    </div>
+                                                                }
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
                             }
                         }
                     </tbody>
@@ -101,6 +243,7 @@
     private string MessageClass = "alert-info";
     private List<Report> Reports = new();
     private Dictionary<int, string> NotesByReport = new();
+    private HashSet<int> ExpandedReportIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -112,9 +255,9 @@
         IsLoading = true;
         try
         {
-            var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
+            var cycle = await ReportingApiClient.GetActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
-            Reports = await CurrentUserReportService.GetMyUnitReportsAsync(cycle.Id);
+            Reports = await ReportingApiClient.GetUnitReportsAsync(cycle.Id);
             NotesByReport = Reports.ToDictionary(r => r.Id, _ => string.Empty);
         }
         catch (Exception ex)
@@ -131,9 +274,9 @@
     {
         try
         {
-            var updated = await CurrentUserReportService.ApproveAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            var updated = await ReportingApiClient.ApproveAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
             ReplaceReport(updated);
-            SetMessage($"Report #{reportId} approved and forwarded to state.", true);
+            SetMessage($"Report #{reportId} successfully approved and forwarded to State Secretariat.", true);
         }
         catch (Exception ex)
         {
@@ -145,9 +288,9 @@
     {
         try
         {
-            var updated = await CurrentUserReportService.RejectAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            var updated = await ReportingApiClient.RejectAtUnitAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
             ReplaceReport(updated);
-            SetMessage($"Report #{reportId} rejected to unit officer(s).", true);
+            SetMessage($"Report #{reportId} successfully returned to Unit Officer for corrections.", true);
         }
         catch (Exception ex)
         {
@@ -179,16 +322,65 @@
         MessageClass = success ? "alert-success" : "alert-danger";
     }
 
-    private static string GetStatusBadge(ReportStatus status) => status switch
+    private void ToggleExpanded(int reportId)
     {
-        ReportStatus.Draft => "bg-secondary",
-        ReportStatus.SubmittedToPresident => "bg-info",
-        ReportStatus.RejectedByPresident => "bg-danger",
-        ReportStatus.SubmittedToState => "bg-primary",
-        ReportStatus.RejectedByState => "bg-danger",
-        ReportStatus.SubmittedToNational => "bg-dark",
-        ReportStatus.Acknowledged => "bg-success",
-        _ => "bg-secondary"
+        if (!ExpandedReportIds.Add(reportId))
+        {
+            ExpandedReportIds.Remove(reportId);
+        }
+    }
+
+    private static string GetDepartmentAttachmentDownloadUrl(int attachmentId) => $"/attachments/department/{attachmentId}";
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024d:F1} KB";
+        }
+
+        return $"{bytes / 1024d / 1024d:F1} MB";
+    }
+
+    private static string GetStatusBadgeClass(ReportStatus status) => status switch
+    {
+        ReportStatus.Draft => "bg-surface-variant text-on-surface-variant",
+        ReportStatus.SubmittedToPresident => "bg-warning-bg text-warning border border-warning/15",
+        ReportStatus.RejectedByPresident => "bg-danger-bg text-danger border border-danger/15",
+        ReportStatus.SubmittedToState => "bg-primary-light text-primary border border-primary/10",
+        ReportStatus.RejectedByState => "bg-danger-bg text-danger border border-danger/15",
+        ReportStatus.SubmittedToNational => "bg-primary-light text-primary border border-primary/10",
+        ReportStatus.Acknowledged => "bg-success-bg text-success border border-success/15",
+        _ => "bg-surface-variant text-on-surface-variant"
+    };
+
+    private static string GetStatusBadgeIcon(ReportStatus status) => status switch
+    {
+        ReportStatus.Draft => "edit",
+        ReportStatus.SubmittedToPresident => "pending_actions",
+        ReportStatus.RejectedByPresident => "assignment_late",
+        ReportStatus.SubmittedToState => "forward_to_inbox",
+        ReportStatus.RejectedByState => "assignment_late",
+        ReportStatus.SubmittedToNational => "forward_to_inbox",
+        ReportStatus.Acknowledged => "verified",
+        _ => "help"
+    };
+
+    private static string GetStatusBadgeLabel(ReportStatus status) => status switch
+    {
+        ReportStatus.Draft => "Draft",
+        ReportStatus.SubmittedToPresident => "Awaiting Audit",
+        ReportStatus.RejectedByPresident => "Returned",
+        ReportStatus.SubmittedToState => "Forwarded State",
+        ReportStatus.RejectedByState => "Rejected State",
+        ReportStatus.SubmittedToNational => "Forwarded Nat.",
+        ReportStatus.Acknowledged => "Acknowledged",
+        _ => status.ToString()
     };
 
     private static bool CanUnitLeadershipAct(Report report)

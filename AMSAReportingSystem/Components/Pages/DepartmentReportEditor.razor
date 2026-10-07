@@ -1,222 +1,459 @@
 @page "/report/{DepartmentSlug}"
 @using AMSAReportingSystem.Data.Entities
 @using AMSAReportingSystem.Services
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
 @inject CurrentUserReportService CurrentUserReportService
+@inject ReportingApiClient ReportingApiClient
 @inject NavigationManager Nav
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 
-<PageTitle>Department Report</PageTitle>
+<PageTitle>@DepartmentName Department Report</PageTitle>
 
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h3 class="mb-0">@DepartmentName Report</h3>
-            <small class="text-muted">@CycleLabel · Deadline: @DeadlineLabel</small>
+<div class="max-w-7xl mx-auto py-6 px-4 md:px-6 flex flex-col gap-6 animate-fadeIn pb-16">
+    <!-- Header Controls -->
+    <div class="flex justify-between items-center bg-surface-white border border-border-subtle p-4 rounded-2xl shadow-sm">
+        <div class="flex items-center gap-3">
+            <button class="flex items-center gap-1.5 px-3.5 py-1.5 bg-surface-white border border-border-subtle hover:bg-surface-container-low text-on-surface font-semibold text-xs rounded-xl shadow-sm cursor-pointer transition-colors" @onclick="BackToDashboard">
+                <span class="material-symbols-outlined text-sm">arrow_back</span>
+                <span>Back</span>
+            </button>
+            <div>
+                <h3 class="font-headline-sm text-base text-primary font-bold mb-0">@DepartmentName Form</h3>
+                <small class="text-xs text-on-surface-variant font-medium">@CycleLabel · Deadline: @DeadlineLabel</small>
+            </div>
         </div>
-        <button class="btn btn-outline-secondary btn-sm" @onclick="BackToDashboard">Back</button>
+        
+        <div class="flex items-center gap-2">
+            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider @(DepartmentSubmitted ? "bg-success-bg text-success border border-success/15" : "bg-warning-bg text-warning border border-warning/15") border shadow-sm">
+                <span class="material-symbols-outlined text-[14px] mr-1">@(DepartmentSubmitted ? "verified" : "sync")</span>
+                @(DepartmentSubmitted ? "Submitted" : "Draft State")
+            </span>
+        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(Message))
     {
-        <div class="alert @MessageClass" role="alert">@Message</div>
+        <div class="p-4 rounded-xl border flex gap-3 items-center text-sm shadow-sm @(MessageClass == "alert-success" ? "bg-success-bg border-success/20 text-success" : "bg-danger-bg border-danger/20 text-danger")">
+            <span class="material-symbols-outlined">@(MessageClass == "alert-success" ? "check_circle" : "error")</span>
+            <span class="font-semibold">@Message</span>
+        </div>
     }
 
     @if (IsLoading)
     {
-        <div class="alert alert-info">Loading report form...</div>
+        <div class="text-center text-on-surface-variant py-16 flex flex-col items-center gap-2 bg-surface-white rounded-2xl border border-border-subtle shadow-sm">
+            <span class="material-symbols-outlined text-4xl text-primary animate-spin">sync</span>
+            <span class="text-sm font-semibold">Loading report inputs...</span>
+        </div>
     }
     else
     {
         @if (IsCycleLocked)
         {
-            <div class="alert alert-warning">
-                This reporting cycle is locked. Submissions are read-only after deadline.
+            <div class="p-4 bg-warning-bg border border-warning/20 text-warning rounded-xl flex gap-3 text-sm font-semibold shadow-sm">
+                <span class="material-symbols-outlined">lock</span>
+                <span>This reporting cycle is locked. Form values are read-only.</span>
             </div>
         }
 
-        <div class="mb-3">
-            <span class="badge @(DepartmentSubmitted ? "bg-success" : "bg-warning text-dark")">
-                @(DepartmentSubmitted ? "Department Submitted" : "Draft")
-            </span>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <strong>Department Questions</strong>
-            </div>
-            <div class="card-body">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Left Side: Data Entry Form Card (8 cols) -->
+            <div class="lg:col-span-8 bg-surface-white rounded-2xl border border-border-subtle p-6 shadow-sm flex flex-col gap-5">
+                <h4 class="font-headline-sm text-sm text-outline uppercase tracking-wider font-bold mb-2">Department Questionnaire</h4>
+                
                 @if (_department == DepartmentType.Taleem)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">Average number of AMSA members that participated in Ta'leem sessions this month</label>
-                        <input type="number" class="form-control" min="0" @bind="Taleem.AttendanceCount" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Total member count (for % calculation)</label>
-                        <input type="number" class="form-control" min="0" @bind="Taleem.TotalMemberCount" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">If below 75%, give reasons</label>
-                        <textarea class="form-control" rows="3" @bind="Taleem.BelowSeventyFiveReasons"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">How long in minutes was spent in Taleem class</label>
-                        <input type="number" class="form-control" min="0" @bind="Taleem.SessionDurationMinutes" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">How many members did the monthly test</label>
-                        <input type="number" class="form-control" min="0" @bind="Taleem.MonthlyTestParticipants" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">How many Ta'leem sessions were organised in your unit</label>
-                        <input type="number" class="form-control" min="0" @bind="Taleem.SessionsOrganized" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Notes (include mosque session details)</label>
-                        <textarea class="form-control" rows="3" @bind="Taleem.Notes"></textarea>
+                    <div class="flex flex-col gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Ta'leem Session Attendees (Average)</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Taleem.AttendanceCount" disabled="@IsCycleLocked" />
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Total Active Unit Tajneed (Members)</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Taleem.TotalMemberCount" disabled="@IsCycleLocked" />
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">If attendance was below 75%, state specific reasons</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="Taleem.BelowSeventyFiveReasons" placeholder="Explain external issues or local constraints..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Class Duration (Minutes)</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Taleem.SessionDurationMinutes" disabled="@IsCycleLocked" />
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Monthly Quran Test Takers</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Taleem.MonthlyTestParticipants" disabled="@IsCycleLocked" />
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Total Sessions Organised</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Taleem.SessionsOrganized" disabled="@IsCycleLocked" />
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Additional Notes (Mosques / Locations details)</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="Taleem.Notes" placeholder="Write additional context..." disabled="@IsCycleLocked"></textarea>
+                        </div>
                     </div>
                 }
                 else if (_department == DepartmentType.Tabligh)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">What were the Tabligh activities carried out? Give concise details</label>
-                        <textarea class="form-control" rows="4" @bind="Tabligh.ActivitiesDetails"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">What was the purpose</label>
-                        <textarea class="form-control" rows="3" @bind="Tabligh.Purpose"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">How many people attended</label>
-                        <input type="number" class="form-control" min="0" @bind="Tabligh.AttendeeCount" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Who were the beneficiaries</label>
-                        <textarea class="form-control" rows="3" @bind="Tabligh.Beneficiaries"></textarea>
-                    </div>
-                    <div class="alert @(HasOnCampusActivityPreview ? "alert-success" : "alert-warning") py-2 mb-0">
-                        On-campus activity detected from your response: <strong>@(HasOnCampusActivityPreview ? "Yes" : "No")</strong>
+                    <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Concise Description of Tabligh Activities</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="4" @bind="Tabligh.ActivitiesDetails" placeholder="Detail street preachings, book handouts, or campus forums..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Outreach Purpose / Goal</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="2" @bind="Tabligh.Purpose" placeholder="e.g. Cleansing misconceptions, invitations..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Total Attendees Count</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Tabligh.AttendeeCount" disabled="@IsCycleLocked" />
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Primary Target Beneficiaries</label>
+                                <input type="text" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" @bind="Tabligh.Beneficiaries" placeholder="e.g. Non-muslims, students..." disabled="@IsCycleLocked" />
+                            </div>
+                        </div>
+                        
+                        @if (HasOnCampusActivityPreview)
+                        {
+                            <div class="p-3 bg-success-bg border border-success/20 rounded-xl text-success flex items-center gap-2 text-xs font-semibold">
+                                <span class="material-symbols-outlined text-sm">school</span>
+                                <span>On-campus activity detected from details field. Compliance flagged!</span>
+                            </div>
+                        }
                     </div>
                 }
                 else if (_department == DepartmentType.Welfare)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">How many welfare programs did you hold this month</label>
-                        <input type="number" class="form-control" min="0" @bind="Welfare.ProgramCount" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">How many people participated in the welfare activity</label>
-                        <input type="number" class="form-control" min="0" @bind="Welfare.ParticipantCount" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">What welfare activities were carried out? (include date)</label>
-                        <textarea class="form-control" rows="4" @bind="Welfare.ActivitiesWithDates"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Give a brief report of the welfare activity carried out, with the beneficiaries</label>
-                        <textarea class="form-control" rows="4" @bind="Welfare.BriefReportWithBeneficiaries"></textarea>
+                    <div class="flex flex-col gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Welfare Programs Executed</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Welfare.ProgramCount" disabled="@IsCycleLocked" />
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Total Program Recipients / Participants</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Welfare.ParticipantCount" disabled="@IsCycleLocked" />
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Activities Timeline & Dates</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="Welfare.ActivitiesWithDates" placeholder="List welfare items shared and specific dates..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Brief Report with Beneficiary feedback</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="Welfare.BriefReportWithBeneficiaries" placeholder="Review specific outcomes..." disabled="@IsCycleLocked"></textarea>
+                        </div>
                     </div>
                 }
                 else if (_department == DepartmentType.Sport)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">What games/sports did members participate in this month</label>
-                        <textarea class="form-control" rows="4" @bind="Sport.GamesParticipated"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">How many members participated in each game or sport</label>
-                        <input type="number" class="form-control" min="0" @bind="Sport.MemberParticipantCount" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">How many non-members participated in each game or sport</label>
-                        <input type="number" class="form-control" min="0" @bind="Sport.NonMemberParticipantCount" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Total member count (for % calculation)</label>
-                        <input type="number" class="form-control" min="0" @bind="Sport.TotalMemberCount" />
+                    <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">List Games & Physical Meets Hosted</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="Sport.GamesParticipated" placeholder="e.g. Football matches, athletics, table tennis..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Member Attendees</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Sport.MemberParticipantCount" disabled="@IsCycleLocked" />
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Non-Member Guests</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Sport.NonMemberParticipantCount" disabled="@IsCycleLocked" />
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Total Target Unit Tajneed</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Sport.TotalMemberCount" disabled="@IsCycleLocked" />
+                            </div>
+                        </div>
                     </div>
                 }
                 else if (_department == DepartmentType.Finance)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">How much was generated from AMSA dues this month</label>
-                        <input type="number" class="form-control" min="0" step="0.01" @bind="Finance.DuesCollected" />
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Why did others not pay</label>
-                        <textarea class="form-control" rows="4" @bind="Finance.NonPaymentReasons"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Expected dues amount</label>
-                        <input type="number" class="form-control" min="0" step="0.01" @bind="Finance.ExpectedDues" />
+                    <div class="flex flex-col gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">AMSA Chanda Dues Generated (₦)</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" step="0.01" @bind="Finance.DuesCollected" disabled="@IsCycleLocked" />
+                            </div>
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs font-bold text-on-surface-variant">Expected Target Dues Amount (₦)</label>
+                                <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" step="0.01" @bind="Finance.ExpectedDues" disabled="@IsCycleLocked" />
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Reasons for Payment Defaults (Chanda omissions)</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="4" @bind="Finance.NonPaymentReasons" placeholder="e.g. Student financial difficulties, vacation period..." disabled="@IsCycleLocked"></textarea>
+                        </div>
                     </div>
                 }
                 else if (_department == DepartmentType.Health)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">Which health activity was held this month? (include date)</label>
-                        <textarea class="form-control" rows="4" @bind="Health.HealthActivityWithDate"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">How many people benefitted</label>
-                        <input type="number" class="form-control" min="0" @bind="Health.BeneficiaryCount" />
+                    <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Details of Medical/Health Awareness Campaigns (include date)</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="4" @bind="Health.HealthActivityWithDate" placeholder="Describe medical checks, lectures, runs and specific dates..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Total Health Beneficiary Count</label>
+                            <input type="number" class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" min="0" @bind="Health.BeneficiaryCount" disabled="@IsCycleLocked" />
+                        </div>
                     </div>
                 }
                 else if (_department == DepartmentType.SecondarySchool)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">Did you attend the last Jama'at and circuit meeting?</label>
-                        <select class="form-select" @bind="SecondarySchool.AttendedLastJamaatAndCircuitMeeting">
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">If yes, was any effort made towards ensuring the support of parents? How?</label>
-                        <textarea class="form-control" rows="4" @bind="SecondarySchool.ParentSupportEfforts"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">What AMSA activities did jambites and secondary school students participate in this month?</label>
-                        <textarea class="form-control" rows="4" @bind="SecondarySchool.StudentActivities"></textarea>
+                    <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Did you attend the last Circuit / Jama'at Executive Meeting?</label>
+                            <select class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none bg-surface-white transition-all cursor-pointer" @bind="SecondarySchool.AttendedLastJamaatAndCircuitMeeting" disabled="@IsCycleLocked">
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">If yes, what efforts were made to ensure parents' support?</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="SecondarySchool.ParentSupportEfforts" placeholder="Detail visits, phone calls, or flyers..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">AMSA activities involving jambites and secondary school students</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="SecondarySchool.StudentActivities" placeholder="List tutorials, sport setups, or moral sessions..." disabled="@IsCycleLocked"></textarea>
+                        </div>
                     </div>
                 }
                 else if (_department == DepartmentType.Tajneed)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">Do you have an accurate and updated Tajneed of all AMSA members in your unit?</label>
-                        <select class="form-select" @bind="Tajneed.HasAccurateUpdatedTajneed">
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">What efforts did you put in to improve?</label>
-                        <textarea class="form-control" rows="4" @bind="Tajneed.ImprovementEfforts"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">What are your plans on having accurate Tajneed?</label>
-                        <textarea class="form-control" rows="4" @bind="Tajneed.AccuracyPlans"></textarea>
+                    <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Do you maintain an updated and verified Tajneed database of all unit members?</label>
+                            <select class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none bg-surface-white transition-all cursor-pointer" @bind="Tajneed.HasAccurateUpdatedTajneed" disabled="@IsCycleLocked">
+                                <option value="true">Yes</option>
+                                <option value="false">No</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Operational census improvement efforts taken</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="Tajneed.ImprovementEfforts" placeholder="Detail phone verification logs, home visits..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Active plans to ensure 100% census data integrity</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="3" @bind="Tajneed.AccuracyPlans" placeholder="Outline digitisation steps, sync timelines..." disabled="@IsCycleLocked"></textarea>
+                        </div>
                     </div>
                 }
                 else if (_department == DepartmentType.General)
                 {
-                    <div class="mb-3">
-                        <label class="form-label">Was there any challenge(s) faced while carrying out activities? If yes, what were they and how do you plan to solve them?</label>
-                        <textarea class="form-control" rows="4" @bind="General.ChallengesAndResolutionPlan"></textarea>
-                    </div>
-                    <div class="mb-0">
-                        <label class="form-label">Give a brief and concise report of any other activities carried out this month (include date)</label>
-                        <textarea class="form-control" rows="4" @bind="General.OtherActivitiesWithDates"></textarea>
+                    <div class="flex flex-col gap-4">
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Highlight major operational challenges and proposed resolutions</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="4" @bind="General.ChallengesAndResolutionPlan" placeholder="Explain details and how unit leadership can assist..." disabled="@IsCycleLocked"></textarea>
+                        </div>
+                        <div class="flex flex-col gap-1.5">
+                            <label class="text-xs font-bold text-on-surface-variant">Brief overview of other miscellaneous events (include dates)</label>
+                            <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all" rows="4" @bind="General.OtherActivitiesWithDates" placeholder="Detail meetings, social gatherings, visits..." disabled="@IsCycleLocked"></textarea>
+                        </div>
                     </div>
                 }
+
+                <div class="border-t border-border-subtle pt-4 flex flex-col gap-4">
+                    <div class="flex flex-col gap-1.5">
+                        <label class="text-xs font-bold text-on-surface-variant">Shared Additional Notes</label>
+                        <textarea class="w-full rounded-xl border border-border-subtle p-3 text-sm focus:border-accent-gold focus:ring-4 focus:ring-gold-glow outline-none transition-all"
+                                  rows="4"
+                                  @bind="AdditionalNotes"
+                                  placeholder="Add supporting notes that should travel with this department report through unit, state, and national review."
+                                  disabled="@IsCycleLocked"></textarea>
+                    </div>
+
+                    <div class="flex flex-col gap-3 rounded-2xl border border-border-subtle bg-bg-cream p-4">
+                        <div>
+                            <h5 class="text-xs font-bold text-outline uppercase tracking-wider">Supporting Files</h5>
+                            <p class="text-xs text-on-surface-variant mt-1">Allowed: PDF, Office docs, images, text files. Max 10 MB per file.</p>
+                        </div>
+
+                        <InputFile OnChange="HandleDepartmentAttachmentSelectedAsync" disabled="@IsCycleLocked" />
+
+                        @if (DepartmentAttachments.Count == 0)
+                        {
+                            <div class="text-xs text-on-surface-variant">No supporting files uploaded yet.</div>
+                        }
+                        else
+                        {
+                            <div class="flex flex-col gap-2">
+                                @foreach (var attachment in DepartmentAttachments)
+                                {
+                                    <div class="flex items-center justify-between rounded-xl bg-surface-white border border-border-subtle px-3 py-2">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-semibold text-on-surface truncate">@attachment.FileName</div>
+                                            <div class="text-[11px] text-on-surface-variant">@attachment.ContentType · @FormatFileSize(attachment.FileSizeBytes)</div>
+                                        </div>
+                                        <button type="button"
+                                                class="px-3 py-1.5 rounded-lg border border-danger/30 text-danger text-xs font-semibold hover:bg-danger hover:text-white transition-colors"
+                                                @onclick="() => RemoveDepartmentAttachmentAsync(attachment.Id)"
+                                                disabled="@IsCycleLocked">
+                                            Remove
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+                
+                <!-- Action Footer -->
+                <div class="flex flex-wrap gap-3 border-t border-border-subtle pt-4 mt-2">
+                    <button class="px-5 py-2.5 bg-surface-white border border-border-subtle hover:bg-surface-container-low text-primary rounded-xl font-bold text-xs shadow-sm cursor-pointer transition-colors" @onclick="SaveDraftAsync" disabled="@DisableActions">
+                        Save Draft
+                    </button>
+                    <button class="px-5 py-2.5 bg-success hover:bg-primary text-white border-0 rounded-xl font-bold text-xs shadow-md cursor-pointer transition-all flex items-center gap-1.5" @onclick="SubmitDepartmentAsync" disabled="@DisableActions">
+                        <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                        <span>Submit Department</span>
+                    </button>
+                    @if (CanSubmitFullReport)
+                    {
+                        <button class="px-5 py-2.5 bg-primary-deep hover:bg-primary text-white border-0 rounded-xl font-bold text-xs shadow-md cursor-pointer transition-all flex items-center gap-1.5" @onclick="SubmitFullReportAsync" disabled="@DisableActions">
+                            <span class="material-symbols-outlined text-[16px]">publish</span>
+                            <span>Submit Full Unit Report</span>
+                        </button>
+                    }
+                </div>
             </div>
-            <div class="card-footer d-flex flex-wrap gap-2">
-                <button class="btn btn-primary" @onclick="SaveDraftAsync" disabled="@DisableActions">Save Draft</button>
-                <button class="btn btn-success" @onclick="SubmitDepartmentAsync" disabled="@DisableActions">Submit Department</button>
-                @if (CanSubmitFullReport)
-                {
-                    <button class="btn btn-dark" @onclick="SubmitFullReportAsync" disabled="@DisableActions">Submit Full Report</button>
-                }
+            
+            <!-- Right Side: Compliance & Verification Panel (4 cols) -->
+            <div class="lg:col-span-4 flex flex-col gap-6">
+                <!-- Sync Auto Save Card -->
+                <div class="bg-bg-cream rounded-2xl border border-border-subtle p-5 shadow-sm">
+                    <h5 class="text-xs font-bold text-outline uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-sm animate-spin text-primary">sync</span>
+                        <span>Amanah Sync Status</span>
+                    </h5>
+                    <p class="text-xs text-on-surface-variant leading-relaxed">
+                        Form drafts are saved locally as you fill them. Click "Save Draft" to back up manually, or "Submit Department" to finalize.
+                    </p>
+                </div>
+
+                <!-- Dynamic Compliance Engine -->
+                <div class="bg-surface-white rounded-2xl border border-border-subtle p-5 shadow-sm flex flex-col gap-4">
+                    <h5 class="text-xs font-bold text-outline uppercase tracking-wider border-b border-border-subtle pb-2 flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-primary text-sm fill">verified</span>
+                        <span>Compliance Evaluator</span>
+                    </h5>
+                    
+                    @if (_department == DepartmentType.Taleem)
+                    {
+                        var attendanceCountVal = Taleem.AttendanceCount ?? 0;
+                        var totalMemberCountVal = Taleem.TotalMemberCount ?? 0;
+                        var attendanceRate = totalMemberCountVal == 0 ? 0 : (int)Math.Round((attendanceCountVal * 100.0) / totalMemberCountVal);
+                        var mandatorySessions = Taleem.SessionsOrganized ?? 0;
+                        var sessionsMet = mandatorySessions >= 4;
+                        var attendanceMet = attendanceRate >= 75;
+                        var colorClass = attendanceRate >= 75 ? "text-success bg-success-bg border-success/15" : attendanceRate >= 60 ? "text-warning bg-warning-bg border-warning/15" : "text-danger bg-danger-bg border-danger/20";
+                        
+                        
+                        <div class="flex flex-col gap-4">
+                            <!-- Sessions compliance -->
+                            <div class="flex items-start gap-2.5">
+                                <span class="material-symbols-outlined @(sessionsMet ? "text-success" : "text-warning")">
+                                    @(sessionsMet ? "task_alt" : "hourglass_empty")
+                                </span>
+                                <div>
+                                    <h6 class="text-xs font-bold text-on-surface">Study Circle Frequency</h6>
+                                    <p class="text-[11px] text-on-surface-variant mt-0.5">@mandatorySessions of 4 mandatory sessions recorded.</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Attendance progress circle -->
+                            <div class="border rounded-xl p-4 flex items-center justify-between gap-3 @colorClass border">
+                                <div>
+                                    <h6 class="text-xs font-bold">Attendance Ratio</h6>
+                                    <p class="text-[10px] opacity-90 mt-0.5">Calculated from total membership.</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xl font-extrabold">@attendanceRate%</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Bottom alert -->
+                            @if (sessionsMet && attendanceMet)
+                            {
+                                <div class="p-3 bg-success-bg border border-success/20 text-success text-[11px] rounded-lg font-bold leading-relaxed">
+                                    Excellent Effort! Standard Ta'leem metrics successfully satisfied. Jazakumullah!
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="p-3 bg-warning-bg border border-warning/20 text-warning text-[11px] rounded-lg font-semibold leading-relaxed">
+                                    If monthly attendance is under 75% or sessions are below 4, please provide solid reasons in the comments field.
+                                </div>
+                            }
+                        </div>
+                    }
+                    else if (_department == DepartmentType.Finance)
+                    {
+                        var duesCollectedVal = Finance.DuesCollected ?? 0m;
+                        var expectedDuesVal = Finance.ExpectedDues ?? 0m;
+                        var collectionRate = expectedDuesVal == 0m ? 0 : (int)Math.Round((duesCollectedVal * 100m) / expectedDuesVal);
+                        var rateMet = collectionRate >= 100;
+                        var colorClass = rateMet ? "text-success bg-success-bg border-success/15" : "text-warning bg-warning-bg border-warning/15";
+                        
+                        
+                        <div class="flex flex-col gap-4">
+                            <div class="flex items-start gap-2.5">
+                                <span class="material-symbols-outlined @(rateMet ? "text-success" : "text-warning")">
+                                    @(rateMet ? "task_alt" : "hourglass_empty")
+                                </span>
+                                <div>
+                                    <h6 class="text-xs font-bold text-on-surface">Target Collections Met</h6>
+                                    <p class="text-[11px] text-on-surface-variant mt-0.5">Collection rate calculated from expected targets.</p>
+                                </div>
+                            </div>
+                            
+                            <div class="border rounded-xl p-4 flex items-center justify-between gap-3 @colorClass border">
+                                <div>
+                                    <h6 class="text-xs font-bold">Collections Rate</h6>
+                                    <p class="text-[10px] opacity-90 mt-0.5">Dues collected vs Expected</p>
+                                </div>
+                                <div class="text-right">
+                                    <span class="text-xl font-extrabold">@collectionRate%</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (_department == DepartmentType.Tabligh)
+                    {
+                        <div class="flex flex-col gap-3">
+                            <div class="flex items-start gap-2.5">
+                                <span class="material-symbols-outlined @(HasOnCampusActivityPreview ? "text-success" : "text-warning")">
+                                    @(HasOnCampusActivityPreview ? "check_circle" : "info")
+                                </span>
+                                <div>
+                                    <h6 class="text-xs font-bold text-on-surface">On-Campus Target</h6>
+                                    <p class="text-[11px] text-on-surface-variant mt-0.5">Unit outreach programs must specify on-campus executions if applicable.</p>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-bg-cream rounded-xl border border-border-subtle text-[11px] text-on-surface-variant leading-relaxed">
+                                Keyword search searches descriptions for "campus" identifiers to verify university student activities.
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-xs text-on-surface-variant leading-relaxed py-2 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-sm text-outline">help</span>
+                            <span>Answer all questions honestly and concisely as part of your administrative Amanah.</span>
+                        </div>
+                    }
+                </div>
             </div>
         </div>
     }
@@ -238,6 +475,8 @@
     private bool CanSubmitFullReport;
     private string? Message;
     private string MessageClass = "alert-info";
+    private string? AdditionalNotes;
+    private List<ReportAttachment> DepartmentAttachments { get; set; } = new();
 
     private TaleemForm Taleem { get; set; } = new();
     private TablighForm Tabligh { get; set; } = new();
@@ -296,6 +535,8 @@
 
             var departmentReport = await CurrentUserReportService.GetDepartmentAsync(_reportId, _department);
             DepartmentSubmitted = departmentReport?.IsSubmitted == true;
+            AdditionalNotes = departmentReport?.AdditionalNotes;
+            DepartmentAttachments = [.. (departmentReport?.Attachments ?? [])];
             LoadDepartmentForm(departmentReport?.ReportData);
         }
         catch (Exception ex)
@@ -335,7 +576,7 @@
         IsSaving = true;
         try
         {
-            await CurrentUserReportService.SubmitReportToPresidentAsync(_reportId, "Submitted from department editor");
+            await ReportingApiClient.SubmitReportAsync(_reportId, "Submitted from department editor");
             SetMessage("Report submitted to unit leadership.", true);
         }
         catch (Exception ex)
@@ -373,7 +614,7 @@
         try
         {
             var payload = DepartmentReportFormMapper.Serialize(_department, GetCurrentFormObject());
-            await CurrentUserReportService.SaveDepartmentJsonAsync(_reportId, _department, payload, markSubmitted);
+            await ReportingApiClient.SaveDepartmentAsync(_reportId, _department, payload, GetAdditionalNotes(), markSubmitted);
             DepartmentSubmitted = DepartmentSubmitted || markSubmitted;
             SetMessage(markSubmitted ? "Department submitted successfully." : "Draft saved successfully.", true);
         }
@@ -400,6 +641,65 @@
         DepartmentType.General => General,
         _ => General
     };
+
+    private string? GetAdditionalNotes() => _department switch
+    {
+        _ => string.IsNullOrWhiteSpace(AdditionalNotes) ? null : AdditionalNotes.Trim()
+    };
+
+    private async Task HandleDepartmentAttachmentSelectedAsync(InputFileChangeEventArgs args)
+    {
+        if (_reportId <= 0 || IsCycleLocked)
+        {
+            return;
+        }
+
+        var file = args.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var attachment = await ReportingApiClient.AddDepartmentAttachmentAsync(_reportId, _department, file);
+            DepartmentAttachments.Insert(0, attachment);
+            SetMessage($"Attached {file.Name} successfully.", true);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+    }
+
+    private async Task RemoveDepartmentAttachmentAsync(int attachmentId)
+    {
+        try
+        {
+            await ReportingApiClient.RemoveDepartmentAttachmentAsync(attachmentId);
+            DepartmentAttachments.RemoveAll(a => a.Id == attachmentId);
+            SetMessage("Attachment removed.", true);
+        }
+        catch (Exception ex)
+        {
+            SetMessage(ex.Message, false);
+        }
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024d:F1} KB";
+        }
+
+        return $"{bytes / 1024d / 1024d:F1} MB";
+    }
 
     private void LoadDepartmentForm(string? reportData)
     {
@@ -475,15 +775,15 @@
 
     private static string GetDepartmentTitle(DepartmentType department) => department switch
     {
-        DepartmentType.Taleem => "Taleem",
-        DepartmentType.Tabligh => "Tabligh",
-        DepartmentType.Welfare => "Welfare",
-        DepartmentType.Sport => "Sport",
-        DepartmentType.Finance => "Finance",
-        DepartmentType.Health => "Health",
+        DepartmentType.Taleem => "Ta'leem (Education)",
+        DepartmentType.Tabligh => "Tabligh (Outreach)",
+        DepartmentType.Welfare => "Welfare (Amoomi)",
+        DepartmentType.Sport => "Sport & Physical",
+        DepartmentType.Finance => "Finance (Maal)",
+        DepartmentType.Health => "Health & Medical",
         DepartmentType.SecondarySchool => "Secondary School",
-        DepartmentType.Tajneed => "Tajneed",
-        DepartmentType.General => "General",
+        DepartmentType.Tajneed => "Tajneed (Census)",
+        DepartmentType.General => "General & Challenges",
         _ => department.ToString()
     };
 

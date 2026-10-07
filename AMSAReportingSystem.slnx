@@ -2,5 +2,11 @@
   <Project Path="AMSAReportingSystem.Client/AMSAReportingSystem.Client.csproj" />
   <Project Path="AMSAReportingSystem/AMSAReportingSystem.csproj" />
   <Project Path="AMSAReportingSystem.Tests/AMSAReportingSystem.Tests.csproj" />
+  <Project Path="AMSAReportingSystem.Core/AMSAReportingSystem.Core.csproj">
+    <Build Solution="Debug|*" Project="true" />
+  </Project>
+  <Project Path="AMSAReportingSystem.Infrastructure/AMSAReportingSystem.Infrastructure.csproj">
+    <Build Solution="Debug|*" Project="true" />
+  </Project>
   <Project Path="AMSAReportingSystem.IntegrationTests/AMSAReportingSystem.IntegrationTests.csproj" />
 </Solution>

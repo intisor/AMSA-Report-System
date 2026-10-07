@@ -71,6 +71,7 @@ public class DepartmentReport
     public int ReportId { get; set; }
     public int? CycleId { get; set; } // denormalized for analytics
     public DepartmentType Department { get; set; }
+    public string? AdditionalNotes { get; set; }
     /// <summary>
     /// Department-specific payload stored as JSON text.
     /// This avoids schema churn for changing report questions/fields.
@@ -96,6 +97,7 @@ public class DepartmentReport
 
     // Foreign keys
     public Report Report { get; set; } = null!;
+    public ICollection<ReportAttachment> Attachments { get; set; } = new List<ReportAttachment>();
 
 }
 

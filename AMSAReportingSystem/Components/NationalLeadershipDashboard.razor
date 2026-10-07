@@ -1,7 +1,9 @@
+@using AMSAReportingSystem.Core.Abstractions
 @using AMSAReportingSystem.Data.Entities
 @using AMSAReportingSystem.Services
-@inject CurrentUserReportService CurrentUserReportService
-@inject AmsaDirectoryLookupCache DirectoryLookupCache
+@using Microsoft.AspNetCore.Components
+@inject ReportingApiClient ReportingApiClient
+@inject IOrganizationDirectory DirectoryLookupCache
 
 <div class="container">
     @if (IsLoading)
@@ -53,9 +55,14 @@
                         {
                             @foreach (var report in ReportsWithContext)
                             {
+                                var isExpanded = ExpandedReportIds.Contains(report.ReportId);
                                 <tr>
                                     <td>@GetStateName(report.StateId)</td>
-                                    <td><strong>@GetUnitName(report.UnitId)</strong></td>
+                                    <td>
+                                        <button type="button" class="btn btn-link btn-sm text-decoration-none fw-bold px-0" @onclick="() => ToggleExpanded(report.ReportId)">
+                                            <span class="me-1">@(isExpanded ? "▼" : "▶")</span><strong>@GetUnitName(report.UnitId)</strong>
+                                        </button>
+                                    </td>
                                     <td><span class="badge @GetStatusBadge(report.Status)">@report.Status</span></td>
                                     <td>@(report.ApprovedByStateAt?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
                                     <td>
@@ -64,6 +71,16 @@
                                             <span class="badge bg-info">State reviewed</span>
                                             <br />
                                             <small class="text-muted">Units: @report.StateContext.UnitsAttendedTo/@report.StateContext.TotalUnitReportsCount</small>
+                                            @if (!string.IsNullOrWhiteSpace(report.StateContext.AdditionalNotes))
+                                            {
+                                                <br />
+                                                <small class="text-muted">Note: @report.StateContext.AdditionalNotes</small>
+                                            }
+                                            @if (report.StateContext.Attachments.Count > 0)
+                                            {
+                                                <br />
+                                                <small class="text-muted">Attachments: @report.StateContext.Attachments.Count</small>
+                                            }
                                         }
                                         else
                                         {
@@ -88,6 +105,70 @@
                                         }
                                     </td>
                                 </tr>
+
+                                @if (isExpanded)
+                                {
+                                    <tr class="table-light">
+                                        <td colspan="7">
+                                            <div class="p-3">
+                                                @if (report.StateContext is not null)
+                                                {
+                                                    <div class="border rounded p-3 bg-white mb-3">
+                                                        <h6 class="fw-bold mb-2">State Report Context</h6>
+                                                        <div class="small text-muted mb-2">@(string.IsNullOrWhiteSpace(report.StateContext.AdditionalNotes) ? "No shared state note." : report.StateContext.AdditionalNotes)</div>
+                                                        @if (report.StateContext.Attachments.Count == 0)
+                                                        {
+                                                            <div class="small text-muted">No state attachments uploaded.</div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <ul class="list-group list-group-flush">
+                                                                @foreach (var attachment in report.StateContext.Attachments)
+                                                                {
+                                                                    <li class="list-group-item px-0">
+                                                                        <div class="fw-semibold"><a href="@GetStateAttachmentDownloadUrl(attachment.Id)" target="_blank" rel="noopener noreferrer">@attachment.FileName</a></div>
+                                                                        <div class="small text-muted">@attachment.ContentType · @FormatFileSize(attachment.FileSizeBytes)</div>
+                                                                    </li>
+                                                                }
+                                                            </ul>
+                                                        }
+                                                    </div>
+                                                }
+
+                                                <div class="row g-3">
+                                                    @foreach (var department in report.Departments.OrderBy(d => d.Department))
+                                                    {
+                                                        <div class="col-lg-6">
+                                                            <div class="border rounded p-3 bg-white h-100">
+                                                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                                                    <strong>@department.DepartmentName</strong>
+                                                                    <span class="small text-muted">@department.Attachments.Count file(s)</span>
+                                                                </div>
+                                                                <div class="small text-muted mb-2">@(string.IsNullOrWhiteSpace(department.AdditionalNotes) ? "No shared department note." : department.AdditionalNotes)</div>
+                                                                @if (department.Attachments.Count == 0)
+                                                                {
+                                                                    <div class="small text-muted">No attachments uploaded.</div>
+                                                                }
+                                                                else
+                                                                {
+                                                                    <ul class="list-group list-group-flush">
+                                                                        @foreach (var attachment in department.Attachments)
+                                                                        {
+                                                                            <li class="list-group-item px-0">
+                                                                                <div class="fw-semibold"><a href="@GetDepartmentAttachmentDownloadUrl(attachment.Id)" target="_blank" rel="noopener noreferrer">@attachment.FileName</a></div>
+                                                                                <div class="small text-muted">@attachment.ContentType · @FormatFileSize(attachment.FileSizeBytes)</div>
+                                                                            </li>
+                                                                        }
+                                                                    </ul>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
                             }
                         }
                     </tbody>
@@ -109,6 +190,7 @@
     private Dictionary<int, string> NotesByReport = new();
     private Dictionary<int, string> UnitNamesById = new();
     private Dictionary<int, string> StateNamesById = new();
+    private HashSet<int> ExpandedReportIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -120,9 +202,9 @@
         IsLoading = true;
         try
         {
-            var cycle = await CurrentUserReportService.EnsureActiveCycleAsync();
+            var cycle = await ReportingApiClient.GetActiveCycleAsync();
             CycleLabel = cycle.CycleMonth;
-            ReportsWithContext = await CurrentUserReportService.GetNationalReportsWithStateContextAsync(cycle.Id);
+            ReportsWithContext = await ReportingApiClient.GetNationalReportsAsync(cycle.Id);
             NotesByReport = ReportsWithContext.ToDictionary(r => r.ReportId, _ => string.Empty);
             await WarmReportNamesAsync();
         }
@@ -140,7 +222,7 @@
     {
         try
         {
-            var updated = await CurrentUserReportService.AcknowledgeAtNationalAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
+            var updated = await ReportingApiClient.AcknowledgeAtNationalAsync(reportId, NotesByReport.GetValueOrDefault(reportId));
             ReplaceReport(updated);
             SetMessage($"Report #{reportId} acknowledged by national leadership.", true);
         }
@@ -196,6 +278,14 @@
         MessageClass = success ? "alert-success" : "alert-danger";
     }
 
+    private void ToggleExpanded(int reportId)
+    {
+        if (!ExpandedReportIds.Add(reportId))
+        {
+            ExpandedReportIds.Remove(reportId);
+        }
+    }
+
     private string GetUnitName(int unitId) =>
         UnitNamesById.TryGetValue(unitId, out var name) ? name : $"Unit {unitId}";
 
@@ -217,6 +307,10 @@
         }
     }
 
+    private static string GetDepartmentAttachmentDownloadUrl(int attachmentId) => $"/attachments/department/{attachmentId}";
+
+    private static string GetStateAttachmentDownloadUrl(int attachmentId) => $"/attachments/state/{attachmentId}";
+
     private static string GetStatusBadge(ReportStatus status) => status switch
     {
         ReportStatus.Draft => "bg-secondary",
@@ -228,5 +322,20 @@
         ReportStatus.Acknowledged => "bg-success",
         _ => "bg-secondary"
     };
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes} B";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{bytes / 1024d:F1} KB";
+        }
+
+        return $"{bytes / 1024d / 1024d:F1} MB";
+    }
 }
 

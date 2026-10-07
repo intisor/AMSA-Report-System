@@ -21,4 +21,15 @@ public sealed class RoutingTests : IClassFixture<TestAppFactory>
         // Assert
         Assert.NotNull(response);
     }
+
+    [Fact]
+    public async Task GetUnitReportsApi_WithoutUser_ReturnsUnauthorized()
+    {
+        using var factory = _factory.WithoutCurrentUser();
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/reporting/unit-reports");
+
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
 }

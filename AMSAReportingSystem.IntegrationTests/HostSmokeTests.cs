@@ -34,4 +34,14 @@ public sealed class HostSmokeTests : IClassFixture<TestAppFactory>
         // Assert
         response.EnsureSuccessStatusCode();
     }
+
+    [Fact]
+    public async Task GetActiveCycleApi_WithoutUser_ReturnsSuccessfulResponse()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/reporting/active-cycle");
+
+        response.EnsureSuccessStatusCode();
+    }
 }

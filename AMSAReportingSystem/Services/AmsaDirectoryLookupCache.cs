@@ -1,15 +1,17 @@
+using AMSAReportingSystem.Core.Abstractions;
+
 namespace AMSAReportingSystem.Services;
 
 /// <summary>
 /// Scoped per-circuit cache for AMSA state/unit display names.
 /// </summary>
-public class AmsaDirectoryLookupCache(IAmsaApiClient amsaApiClient)
+public class AmsaDirectoryLookupCache(IAmsaApiClient amsaApiClient) : IOrganizationDirectory
 {
     private readonly IAmsaApiClient _amsaApiClient = amsaApiClient;
     private readonly Dictionary<int, string> _stateNames = [];
     private readonly Dictionary<int, string> _unitNames = [];
 
-    public async Task<string> GetStateNameAsync(int stateId, CancellationToken ct = default)
+    public async ValueTask<string> GetStateNameAsync(int stateId, CancellationToken ct = default)
     {
         if (_stateNames.TryGetValue(stateId, out var cached))
         {
@@ -24,7 +26,7 @@ public class AmsaDirectoryLookupCache(IAmsaApiClient amsaApiClient)
         return name;
     }
 
-    public async Task<string> GetUnitNameAsync(int unitId, CancellationToken ct = default)
+    public async ValueTask<string> GetUnitNameAsync(int unitId, CancellationToken ct = default)
     {
         if (_unitNames.TryGetValue(unitId, out var cached))
         {
